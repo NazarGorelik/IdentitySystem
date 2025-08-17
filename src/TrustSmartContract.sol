@@ -5,16 +5,16 @@ import "./ClaimManagement/ClaimsRegistry.sol";
 import "./ClaimManagement/ClaimToken.sol";
 import "./QTSPManagement/QTSPRightsManager.sol";
 
-
 /**
  * @title Trust Smart Contract
  * @dev Handles signature verification and trust management for QTSP Contracts
- * @notice This contract verifies signatures and manages trust relationships
+ * @notice This contract verifies cryptographic signatures from authorized QTSP Contracts
+ *         and provides trust verification services for the identity system
  */
 contract TrustSmartContract {
     using ClaimsRegistry for bytes32;
     
-    // Reference to the QTSP Rights Manager
+    // Reference to the QTSP Rights Manager for authorization checks
     QTSPRightsManager public rightsManager;
     
     // Events
@@ -24,6 +24,10 @@ contract TrustSmartContract {
     // Owner of the contract
     address public owner;
     
+    /**
+     * @dev Constructor initializes the contract with the QTSP Rights Manager
+     * @param _rightsManager Address of the QTSP Rights Manager contract
+     */
     constructor(address _rightsManager) {
         owner = msg.sender;
         rightsManager = QTSPRightsManager(_rightsManager);
@@ -36,10 +40,12 @@ contract TrustSmartContract {
     
     /**
      * @dev Verify a signature from a QTSP Contract for a specific claim
-     * @param user The address of the user
-     * @param claim The claim type
-     * @param signature The signature to verify
+     * @param user The address of the user whose claim is being verified
+     * @param claim The claim type to verify
+     * @param signature The cryptographic signature to verify
      * @return True if the signature is valid and from an authorized QTSP Contract
+     * @notice This function recovers the signer from the signature and verifies
+     *         their authorization to issue the specified claim
      */
     function verifySignature(
         address user,
@@ -69,10 +75,12 @@ contract TrustSmartContract {
     
     /**
      * @dev Verify a signature stored in a ClaimToken contract
-     * @param user The address of the user
-     * @param claim The claim type
-     * @param tokenContract The ClaimToken contract address
+     * @param user The address of the user whose claim is being verified
+     * @param claim The claim type to verify
+     * @param tokenContract The ClaimToken contract address containing the stored signature
      * @return True if the signature is valid and from an authorized QTSP Contract
+     * @notice This function retrieves a stored signature from a ClaimToken contract
+     *         and verifies its authenticity and authorization
      */
     function verifyStoredSignature(
         address user,
@@ -97,8 +105,10 @@ contract TrustSmartContract {
     /**
      * @dev Recover the signer address from a signature
      * @param hash The hash that was signed
-     * @param signature The signature
+     * @param signature The signature to recover the signer from
      * @return The address of the signer
+     * @notice This function handles Ethereum signature recovery with proper
+     *         signature malleability protection
      */
     function recoverSigner(bytes32 hash, bytes memory signature) public pure returns (address) {
         require(signature.length == 65, "Invalid signature length");
@@ -125,8 +135,8 @@ contract TrustSmartContract {
     
     /**
      * @dev Check if a QTSP Contract is trusted
-     * @param qtspContract The QTSP Contract address
-     * @return True if the QTSP Contract is trusted
+     * @param qtspContract The QTSP Contract address to check
+     * @return True if the QTSP Contract is trusted, false otherwise
      */
     function isTrustedQTSPContract(address qtspContract) external view returns (bool) {
         return rightsManager.trustedQTSPContracts(qtspContract);
@@ -134,9 +144,9 @@ contract TrustSmartContract {
     
     /**
      * @dev Check if a QTSP Contract is authorized for a specific claim
-     * @param qtspContract The QTSP Contract address
-     * @param claim The claim type
-     * @return True if the QTSP Contract is authorized for this claim
+     * @param qtspContract The QTSP Contract address to check
+     * @param claim The claim type to check authorization for
+     * @return True if the QTSP Contract is authorized for this claim, false otherwise
      */
     function isQTSPContractAuthorizedForClaim(address qtspContract, bytes32 claim) external view returns (bool) {
         return rightsManager.isQTSPContractAuthorizedForClaim(qtspContract, claim);
@@ -144,7 +154,7 @@ contract TrustSmartContract {
     
     /**
      * @dev Get the rights manager address
-     * @return The rights manager address
+     * @return The address of the QTSP Rights Manager contract
      */
     function getRightsManager() external view returns (address) {
         return address(rightsManager);
@@ -153,6 +163,7 @@ contract TrustSmartContract {
     /**
      * @dev Transfer ownership of the contract
      * @param newOwner The new owner address
+     * @notice Only the current owner can call this function
      */
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "Invalid new owner address");

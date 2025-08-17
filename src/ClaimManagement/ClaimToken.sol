@@ -8,6 +8,7 @@ import "../QTSPManagement/QTSPRightsManager.sol";
  * @title Claim Token
  * @dev Custom token representing a specific claim with signature storage
  * @notice Each claim type gets its own token contract that stores claimType and signature
+ *         for individual users, enabling decentralized identity verification
  */
 contract ClaimToken {
     using ClaimsRegistry for bytes32;
@@ -31,7 +32,8 @@ contract ClaimToken {
     /**
      * @dev Constructor sets the claim type and validates it against ClaimsRegistry
      * @param _claimType The claim type this token represents (must be valid in ClaimsRegistry)
-     * @param _rightsManager The QTSP Rights Manager address
+     * @param _rightsManager The QTSP Rights Manager address for authorization checks
+     * @notice Validates the claim type and sets up the contract with required dependencies
      */
     constructor(bytes32 _claimType, address _rightsManager) {
         require(ClaimsRegistry.isValidClaim(_claimType), "Invalid claim type");
@@ -53,8 +55,10 @@ contract ClaimToken {
     
     /**
      * @dev Issue token to a user (only callable by authorized QTSP Contracts)
-     * @param user The user to issue token to
-     * @param signature The signature to store
+     * @param user The user address to issue the token to
+     * @param signature The cryptographic signature to store with the token
+     * @notice This function stores a signature that proves the user's claim
+     *         has been verified by an authorized QTSP Contract
      */
     function issueToken(address user, bytes memory signature) external onlyAuthorizedQTSPContract {
         require(user != address(0), "Invalid user address");
@@ -66,7 +70,9 @@ contract ClaimToken {
     
     /**
      * @dev Revoke token from a user (only callable by authorized QTSP Contracts)
-     * @param user The user to revoke token from
+     * @param user The user address to revoke the token from
+     * @notice This function removes the stored signature, effectively revoking
+     *         the user's verified claim
      */
     function revokeToken(address user) external onlyAuthorizedQTSPContract {
         require(user != address(0), "Invalid user address");
@@ -77,18 +83,21 @@ contract ClaimToken {
     }
     
     /**
-     * @dev Check if a user has a signature
-     * @param user The user to check
+     * @dev Check if a user has a verified signature for this claim
+     * @param user The user address to check
      * @return True if user has a signature, false otherwise
+     * @notice This function indicates whether a user's claim has been verified
      */
     function hasToken(address user) external view returns (bool) {
         return userSignatures[user].length > 0;
     }
     
     /**
-     * @dev Get the signature for a user
-     * @param user The user to get signature for
-     * @return The signature for the user
+     * @dev Get the stored signature for a user
+     * @param user The user address to get the signature for
+     * @return The cryptographic signature for the user
+     * @notice This function retrieves the signature that proves the user's
+     *         claim has been verified by an authorized QTSP Contract
      */
     function getUserSignature(address user) external view returns (bytes memory) {
         require(userSignatures[user].length > 0, "User does not have a token");
@@ -97,15 +106,16 @@ contract ClaimToken {
     
     /**
      * @dev Get the claim type as bytes32
-     * @return The claim type
+     * @return The claim type hash that this token represents
      */
     function getClaimType() external view returns (bytes32) {
         return claimType;
     }
     
     /**
-     * @dev Get the claim name as a string
-     * @return The claim name
+     * @dev Get the claim name as a human-readable string
+     * @return The claim name as a string for display purposes
+     * @notice This function provides a human-readable representation of the claim type
      */
     function getClaimName() external view returns (string memory) {
         return ClaimsRegistry.getClaimName(claimType);
@@ -113,7 +123,7 @@ contract ClaimToken {
     
     /**
      * @dev Get the rights manager address
-     * @return The rights manager address
+     * @return The address of the QTSP Rights Manager contract
      */
     function getRightsManager() external view returns (address) {
         return address(rightsManager);
@@ -122,6 +132,7 @@ contract ClaimToken {
     /**
      * @dev Transfer ownership of the contract
      * @param newOwner The new owner address
+     * @notice Only the current owner can call this function
      */
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "Invalid new owner address");

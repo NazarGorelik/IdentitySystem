@@ -7,7 +7,8 @@ import "../ClaimManagement/ClaimToken.sol";
 /**
  * @title QTSP Contract
  * @dev Handles token issuance and revocation for Qualified Trust Service Providers
- * @notice This contract only manages the issuance and revocation of claim tokens
+ * @notice This contract manages the issuance and revocation of claim tokens through
+ *         authorized QTSP contracts that have been registered in the system
  */
 contract QTSPContract {
     using ClaimsRegistry for bytes32;
@@ -25,6 +26,11 @@ contract QTSPContract {
     event TokenIssued(address indexed user, bytes32 indexed claim, address indexed qtsp);
     event TokenRevoked(address indexed user, bytes32 indexed claim, address indexed qtsp);
     
+    /**
+     * @dev Constructor initializes the contract with required dependencies
+     * @param _claimsRegistryContract Address of the Claims Registry Contract
+     * @param _trustContract Address of the Trust Smart Contract
+     */
     constructor(address _claimsRegistryContract, address _trustContract) {
         owner = msg.sender;
         claimsRegistryContract = _claimsRegistryContract;
@@ -37,10 +43,11 @@ contract QTSPContract {
     }
     
     /**
-     * @dev Issue token to a user (signature is generated internally)
-     * @param user The address of the user
-     * @param claim The claim type
-     * @param signature The signature to store
+     * @dev Issue token to a user with a provided signature
+     * @param user The address of the user to issue the token to
+     * @param claim The claim type to issue
+     * @param signature The cryptographic signature to store with the token
+     * @notice Only the contract owner can call this function
      */
     function issueToken(
         address user,
@@ -62,8 +69,9 @@ contract QTSPContract {
     
     /**
      * @dev Revoke token from a user
-     * @param user The address of the user
-     * @param claim The claim type
+     * @param user The address of the user to revoke the token from
+     * @param claim The claim type to revoke
+     * @notice Only the contract owner can call this function
      */
     function revokeToken(
         address user,
@@ -84,8 +92,8 @@ contract QTSPContract {
     
     /**
      * @dev Check if a user has a specific claim token
-     * @param user The address of the user
-     * @param claim The claim type
+     * @param user The address of the user to check
+     * @param claim The claim type to check for
      * @return True if the user has the claim token, false otherwise
      */
     function hasToken(address user, bytes32 claim) external view returns (bool) {

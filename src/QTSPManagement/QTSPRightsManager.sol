@@ -7,6 +7,7 @@ import "../ClaimManagement/ClaimsRegistry.sol";
  * @title QTSP Rights Manager
  * @dev Manages permissions for QTSP Contracts to issue and revoke specific claim tokens
  * @notice This contract grants granular permissions to QTSP Contracts for managing specific claims
+ *         and maintains the trust relationships between QTSP contracts and claim types
  */
 contract QTSPRightsManager {
     using ClaimsRegistry for bytes32;
@@ -51,6 +52,7 @@ contract QTSPRightsManager {
      * @dev Add a QTSP Contract to the trusted list
      * @param qtspContract The address of the QTSP Contract to add
      * @param qtspOwner The owner of the QTSP Contract
+     * @notice Establishes trust relationship and stores owner-contract mapping
      */
     function addTrustedQTSPContract(address qtspContract, address qtspOwner) external onlyOwner {
         require(qtspContract != address(0), "Invalid QTSP Contract address");
@@ -70,13 +72,14 @@ contract QTSPRightsManager {
     /**
      * @dev Remove a QTSP Contract from the trusted list
      * @param qtspContract The address of the QTSP Contract to remove
+     * @notice Removes trust status and cleans up all associated permissions
      */
     function removeTrustedQTSPContract(address qtspContract) external onlyOwner {
         require(trustedQTSPContracts[qtspContract], "QTSP Contract not trusted");
         
         trustedQTSPContracts[qtspContract] = false;
         
-        // Remove from trustedQTSPContractList
+        // Remove from trustedQTSPContractList using swap-and-pop for gas efficiency
         for (uint256 i = 0; i < trustedQTSPContractList.length; i++) {
             if (trustedQTSPContractList[i] == qtspContract) {
                 trustedQTSPContractList[i] = trustedQTSPContractList[trustedQTSPContractList.length - 1];
@@ -97,7 +100,8 @@ contract QTSPRightsManager {
     /**
      * @dev Add a QTSP Contract to the authorized list for a specific claim
      * @param qtspContract The QTSP Contract address to add
-     * @param claim The claim type
+     * @param claim The claim type to authorize
+     * @notice Grants permission for a trusted QTSP Contract to manage a specific claim
      */
     function addQTSPContractToClaim(address qtspContract, bytes32 claim) external onlyOwner {
         require(qtspContract != address(0), "Invalid QTSP Contract address");
@@ -114,12 +118,13 @@ contract QTSPRightsManager {
     /**
      * @dev Remove a QTSP Contract from the authorized list for a specific claim
      * @param qtspContract The QTSP Contract address to remove
-     * @param claim The claim type
+     * @param claim The claim type to revoke authorization for
+     * @notice Revokes permission for a QTSP Contract to manage a specific claim
      */
     function removeQTSPContractFromClaim(address qtspContract, bytes32 claim) public onlyOwner {
         require(ClaimsRegistry.isValidClaim(claim), "Invalid claim type");
         
-        // Remove from claimAuthorizedQTSPContracts
+        // Remove from claimAuthorizedQTSPContracts using swap-and-pop for gas efficiency
         address[] storage qtspContractList = claimAuthorizedQTSPContracts[claim];
         for (uint256 i = 0; i < qtspContractList.length; i++) {
             if (qtspContractList[i] == qtspContract) {
@@ -129,7 +134,7 @@ contract QTSPRightsManager {
             }
         }
         
-        // Remove from qtspContractManagedClaims
+        // Remove from qtspContractManagedClaims using swap-and-pop for gas efficiency
         bytes32[] storage claims = qtspContractManagedClaims[qtspContract];
         for (uint256 i = 0; i < claims.length; i++) {
             if (claims[i] == claim) {
@@ -144,9 +149,10 @@ contract QTSPRightsManager {
     
     /**
      * @dev Check if a QTSP Contract owner is authorized to manage a specific claim
-     * @param qtspContractOwner The QTSP Contract owner address
-     * @param claim The claim type
-     * @return True if the QTSP Contract owner is authorized for this claim
+     * @param qtspContractOwner The QTSP Contract owner address to check
+     * @param claim The claim type to check authorization for
+     * @return True if the QTSP Contract owner is authorized for this claim, false otherwise
+     * @notice This function checks both the trust status and claim-specific authorization
      */
     function isQTSPContractOwnerAuthorizedForClaim(address qtspContractOwner, bytes32 claim) public view returns (bool) {
         // Get the QTSP contract address from the owner
@@ -171,9 +177,10 @@ contract QTSPRightsManager {
 
     /**
      * @dev Check if a QTSP Contract is directly authorized to manage a specific claim
-     * @param qtspContract The QTSP Contract address
-     * @param claim The claim type
-     * @return True if the QTSP Contract is authorized for this claim
+     * @param qtspContract The QTSP Contract address to check
+     * @param claim The claim type to check authorization for
+     * @return True if the QTSP Contract is authorized for this claim, false otherwise
+     * @notice This function checks both the trust status and claim-specific authorization
      */
     function isQTSPContractAuthorizedForClaim(address qtspContract, bytes32 claim) public view returns (bool) {
         if (!trustedQTSPContracts[qtspContract]) {
@@ -192,7 +199,7 @@ contract QTSPRightsManager {
     
     /**
      * @dev Get all QTSP Contracts that can manage a specific claim
-     * @param claim The claim type
+     * @param claim The claim type to get authorized QTSP Contracts for
      * @return Array of QTSP Contract addresses that can manage the claim
      */
     function getClaimAuthorizedQTSPContracts(bytes32 claim) external view returns (address[] memory) {
@@ -201,7 +208,7 @@ contract QTSPRightsManager {
     
     /**
      * @dev Get all claims that a QTSP Contract can manage
-     * @param qtspContract The QTSP Contract address
+     * @param qtspContract The QTSP Contract address to get managed claims for
      * @return Array of claim types the QTSP Contract can manage
      */
     function getQTSPContractManagedClaims(address qtspContract) external view returns (bytes32[] memory) {
@@ -211,6 +218,7 @@ contract QTSPRightsManager {
     /**
      * @dev Get all trusted QTSP Contract addresses
      * @return Array of all trusted QTSP Contract addresses
+     * @notice Returns the complete list of QTSP Contracts that are currently trusted
      */
     function getTrustedQTSPContracts() external view returns (address[] memory) {
         return trustedQTSPContractList;
@@ -218,7 +226,7 @@ contract QTSPRightsManager {
 
     /**
      * @dev Get the QTSP Contract address for a given owner
-     * @param qtspOwner The QTSP Contract owner address
+     * @param qtspOwner The QTSP Contract owner address to look up
      * @return The QTSP Contract address, or address(0) if not found
      */
     function getQTSPContractForOwner(address qtspOwner) external view returns (address) {
@@ -227,7 +235,7 @@ contract QTSPRightsManager {
     
     /**
      * @dev Get the QTSP Contract owner for a given contract address
-     * @param qtspContract The QTSP Contract address
+     * @param qtspContract The QTSP Contract address to look up
      * @return The QTSP Contract owner address, or address(0) if not found
      */
     function getQTSPContractOwner(address qtspContract) external view returns (address) {
@@ -237,7 +245,7 @@ contract QTSPRightsManager {
     /**
      * @dev Check if an address is a QTSP Contract owner
      * @param qtspOwner The address to check
-     * @return True if the address is a QTSP Contract owner
+     * @return True if the address is a QTSP Contract owner, false otherwise
      */
     function isQTSPContractOwner(address qtspOwner) external view returns (bool) {
         return qtspOwnerToContract[qtspOwner] != address(0);
@@ -246,6 +254,7 @@ contract QTSPRightsManager {
     /**
      * @dev Transfer ownership of the contract
      * @param newOwner The new owner address
+     * @notice Only the current owner can call this function
      */
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "Invalid new owner address");
