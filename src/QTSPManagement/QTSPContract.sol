@@ -14,10 +14,7 @@ contract QTSPContract {
     using ClaimsRegistry for bytes32;
     
     // Reference to the Claims Registry Contract
-    address public claimsRegistryContract;
-    
-    // Reference to the Trust Smart Contract for signature verification
-    address public trustContract;
+    ClaimsRegistryContract public claimsRegistryContract;
 
     // Owner of the contract
     address public owner;
@@ -29,12 +26,10 @@ contract QTSPContract {
     /**
      * @dev Constructor initializes the contract with required dependencies
      * @param _claimsRegistryContract Address of the Claims Registry Contract
-     * @param _trustContract Address of the Trust Smart Contract
      */
-    constructor(address _claimsRegistryContract, address _trustContract) {
+    constructor(address _claimsRegistryContract) {
         owner = msg.sender;
-        claimsRegistryContract = _claimsRegistryContract;
-        trustContract = _trustContract;
+        claimsRegistryContract = ClaimsRegistryContract(_claimsRegistryContract);
     }
     
     modifier onlyOwner() {
@@ -58,7 +53,7 @@ contract QTSPContract {
         require(ClaimsRegistry.isValidClaim(claim), "Invalid claim type");
         
         // Get the token contract address from the claims registry
-        address tokenContract = ClaimsRegistryContract(claimsRegistryContract).getClaimTokenAddress(claim);
+        address tokenContract = claimsRegistryContract.getClaimTokenAddress(claim);
         require(tokenContract != address(0), "Claim token not registered");
 
         // Issue token and store the signature
@@ -81,7 +76,7 @@ contract QTSPContract {
         require(ClaimsRegistry.isValidClaim(claim), "Invalid claim type");
         
         // Get the token contract address from the claims registry
-        address tokenContract = ClaimsRegistryContract(claimsRegistryContract).getClaimTokenAddress(claim);
+        address tokenContract = claimsRegistryContract.getClaimTokenAddress(claim);
         require(tokenContract != address(0), "Claim token not registered");
         
         // Revoke token
@@ -97,7 +92,7 @@ contract QTSPContract {
      * @return True if the user has the claim token, false otherwise
      */
     function hasToken(address user, bytes32 claim) external view returns (bool) {
-        address tokenContract = ClaimsRegistryContract(claimsRegistryContract).getClaimTokenAddress(claim);
+        address tokenContract = claimsRegistryContract.getClaimTokenAddress(claim);
         if (tokenContract == address(0)) {
             return false;
         }

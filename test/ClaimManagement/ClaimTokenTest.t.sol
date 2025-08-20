@@ -69,8 +69,7 @@ contract ClaimTokenTest is Test {
     
     function testQTSPContractConstructor() public view {
         assertEq(qtspContract.owner(), DEFAULT_ANVIL_ADDRESS1, "QTSP contract owner should be set correctly");
-        assertEq(qtspContract.claimsRegistryContract(), address(claimsRegistry), "Claims registry should be set correctly");
-        assertEq(qtspContract.trustContract(), address(trustContract), "Trust contract should be set correctly");
+        assertEq(address(qtspContract.claimsRegistryContract()), address(claimsRegistry), "Claims registry should be set correctly");
     }
     
     function testConstructor_InvalidClaimType() public {

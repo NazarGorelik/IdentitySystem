@@ -67,8 +67,7 @@ contract QTSPContractTest is Test {
     
     function testConstructor() public view {
         assertEq(qtspContract1.owner(), DEFAULT_ANVIL_ADDRESS1, "Owner should be set correctly");
-        assertEq(qtspContract1.claimsRegistryContract(), address(claimsRegistry), "Claims registry should be set correctly");
-        assertEq(qtspContract1.trustContract(), address(trustContract), "Trust contract should be set correctly");
+        assertEq(address(qtspContract1.claimsRegistryContract()), address(claimsRegistry), "Claims registry should be set correctly");
     }
     
     function testIssueToken_ValidSignature() public {
@@ -331,8 +330,7 @@ contract QTSPContractTest is Test {
     function testContractStateAfterOperations() public {
         // Verify initial state
         assertEq(qtspContract1.owner(), DEFAULT_ANVIL_ADDRESS1, "Owner should remain unchanged");
-        assertEq(qtspContract1.claimsRegistryContract(), address(claimsRegistry), "Claims registry should remain unchanged");
-        assertEq(qtspContract1.trustContract(), address(trustContract), "Trust contract should remain unchanged");
+        assertEq(address(qtspContract1.claimsRegistryContract()), address(claimsRegistry), "Claims registry should remain unchanged");
         
         // Perform operations
         vm.prank(DEFAULT_ANVIL_ADDRESS1);
@@ -340,7 +338,6 @@ contract QTSPContractTest is Test {
         
         // Verify state remains unchanged
         assertEq(qtspContract1.owner(), DEFAULT_ANVIL_ADDRESS1, "Owner should remain unchanged after operations");
-        assertEq(qtspContract1.claimsRegistryContract(), address(claimsRegistry), "Claims registry should remain unchanged after operations");
-        assertEq(qtspContract1.trustContract(), address(trustContract), "Trust contract should remain unchanged after operations");
+        assertEq(address(qtspContract1.claimsRegistryContract()), address(claimsRegistry), "Claims registry should remain unchanged after operations");
     }
 }

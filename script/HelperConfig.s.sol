@@ -78,10 +78,10 @@ contract HelperConfig is Script {
         TrustSmartContract trustContract = new TrustSmartContract(address(rightsManager));
 
         // Deploy QTSP Contract1
-        QTSPContract qtspContract1 = new QTSPContract(address(claimsRegistry), address(trustContract));
+        QTSPContract qtspContract1 = new QTSPContract(address(claimsRegistry));
 
         // Deploy QTSP Contract2
-        QTSPContract qtspContract2 = new QTSPContract(address(claimsRegistry), address(trustContract));
+        QTSPContract qtspContract2 = new QTSPContract(address(claimsRegistry));
 
         // Deploy Claim Tokens
         ClaimToken over18Token = new ClaimToken(ClaimsRegistry.OVER_18, address(rightsManager));
@@ -138,7 +138,7 @@ contract HelperConfig is Script {
         TrustSmartContract trustContract = new TrustSmartContract(address(rightsManager));
 
         // Deploy QTSP Contract 1 (deployed by DEAFULT_ANVIL_ADDRESS)
-        QTSPContract qtspContract1 = new QTSPContract(address(claimsRegistry), address(trustContract));
+        QTSPContract qtspContract1 = new QTSPContract(address(claimsRegistry));
 
         // Deploy Claim Tokens
         ClaimToken over18Token = new ClaimToken(ClaimsRegistry.OVER_18, address(rightsManager));
@@ -156,7 +156,7 @@ contract HelperConfig is Script {
         vm.startBroadcast(DEFAULT_ANVIL_PRIVATE_KEY2);
         
         // Deploy QTSP Contract 2 (deployed by DEAFULT_ANVIL_ADDRESS2)
-        QTSPContract qtspContract2 = new QTSPContract(address(claimsRegistry), address(trustContract));
+        QTSPContract qtspContract2 = new QTSPContract(address(claimsRegistry));
         
         vm.stopBroadcast();
 
