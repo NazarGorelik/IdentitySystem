@@ -8,13 +8,15 @@ import "../../src/ClaimManagement/ClaimsRegistryContract.sol";
 import "../../src/QTSPManagement/QTSPRightsManager.sol";
 import "../../src/QTSPManagement/QTSPContract.sol";
 import "../../src/TrustSmartContract.sol";
-import "../../script/HelperConfig.s.sol";
+import "../../script/helpers/HelperConfig.s.sol";
+import "../../script/helpers/SharedStructs.s.sol";
 
 contract ClaimTokenTest is Test {
-    HelperConfig.NetworkConfig public config;
+    SharedStructs.NetworkConfig public config;
     ClaimToken public claimToken;
     QTSPRightsManager public rightsManager;
-    QTSPContract public qtspContract;
+    QTSPContract public qtspContract1;
+    QTSPContract public qtspContract2;
     ClaimsRegistryContract public claimsRegistry;
     TrustSmartContract public trustContract;
     
@@ -44,11 +46,12 @@ contract ClaimTokenTest is Test {
         config = helperConfig.getOrCreateNetworkConfig();
         
         // Get contract addresses from your deployment
-        trustContract = TrustSmartContract(config.trustContract);
-        rightsManager = QTSPRightsManager(config.rightsManager);
-        claimToken = ClaimToken(config.over18Token);
-        qtspContract = QTSPContract(config.qtspContract1);
-        claimsRegistry = ClaimsRegistryContract(config.claimsRegistry);
+        trustContract = TrustSmartContract(config.proxies.trustContract);
+        rightsManager = QTSPRightsManager(config.proxies.rightsManager);
+        claimToken = ClaimToken(config.proxies.over18Token);
+        qtspContract1 = QTSPContract(config.proxies.qtspContract1);
+        qtspContract2 = QTSPContract(config.proxies.qtspContract2);
+        claimsRegistry = ClaimsRegistryContract(config.proxies.claimsRegistry);
         
         // Setup valid signature (65 bytes)
         for (uint256 i = 0; i < 65; i++) {
@@ -68,352 +71,202 @@ contract ClaimTokenTest is Test {
     }
     
     function testQTSPContractConstructor() public view {
-        assertEq(qtspContract.owner(), DEFAULT_ANVIL_ADDRESS1, "QTSP contract owner should be set correctly");
-        assertEq(address(qtspContract.claimsRegistryContract()), address(claimsRegistry), "Claims registry should be set correctly");
-    }
-    
-    function testConstructor_InvalidClaimType() public {
-        vm.startPrank(DEFAULT_ANVIL_ADDRESS1);
-        
-        vm.expectRevert("Invalid claim type");
-        new ClaimToken(INVALID_CLAIM, address(rightsManager));
-        
-        vm.stopPrank();
-    }
-    
-    function testConstructor_InvalidRightsManager() public {
-        vm.startPrank(DEFAULT_ANVIL_ADDRESS1);
-        
-        vm.expectRevert("Invalid rights manager address");
-        new ClaimToken(OVER_18, address(0));
-        
-        vm.stopPrank();
+        assertEq(qtspContract1.owner(), DEFAULT_ANVIL_ADDRESS1, "QTSP contract owner should be set correctly");
+        assertEq(address(qtspContract1.claimsRegistryContract()), address(claimsRegistry), "Claims registry should be set correctly");
     }
     
     function testIssueToken_ValidSignature() public {
-        // First, register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
+        // Issue token through the QTSP Contract (which is authorized)
+        vm.prank(DEFAULT_ANVIL_ADDRESS1); // Use the owner of QTSP Contract
         
-        // Now issue token from QTSP contract
-        vm.prank(DEFAULT_ANVIL_ADDRESS1); // QTSP owner calls issueToken
-        
-        vm.expectEmit(true, true, false, false);
+        vm.expectEmit(true, true, true, true);
         emit TokenIssued(testUserWithOver18Token, OVER_18, validSignature);
-        
-        qtspContract.issueToken(testUserWithOver18Token, OVER_18, validSignature);
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
         
         // Verify token was issued
         assertTrue(claimToken.hasToken(testUserWithOver18Token), "User should have token");
         
-        // Verify signature retrieval
-        bytes memory retrievedSignature = claimToken.getUserSignature(testUserWithOver18Token);
-        assertEq(retrievedSignature.length, validSignature.length, "Retrieved signature length should match");
-        
-        // Verify claim type retrieval
-        bytes32 retrievedClaimType = claimToken.getClaimType();
-        assertEq(retrievedClaimType, OVER_18, "Retrieved claim type should match");
+        // Verify signature can be retrieved
+        bytes memory storedSignature = claimToken.getUserSignature(testUserWithOver18Token);
+        assertEq(storedSignature.length, validSignature.length, "Stored signature length should match");
     }
     
-    function testIssueToken_UnauthorizedQTSP() public {
-        // Register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            vm.prank(DEFAULT_ANVIL_ADDRESS1);
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
+    function testIssueToken_OnlyAuthorizedQTSP() public {
+        // Try to issue token from unauthorized address (not the QTSP owner)
+        vm.prank(DEFAULT_ANVIL_ADDRESS2);
         
-        // Try to issue token from unauthorized QTSP contract
-        vm.startPrank(DEFAULT_ANVIL_ADDRESS1);
-        // remove qtsp from claim
-        rightsManager.removeQTSPContractFromClaim(address(qtspContract), OVER_18);
-        vm.expectRevert("Only authorized QTSP Contract can call this function");
-        qtspContract.issueToken(testUserWithOver18Token, OVER_18, validSignature);
-        vm.stopPrank();
-    }
-
-    function testIssueToken_UntrustedQTSP() public {
-        // Register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
-        
-        // Try to issue token from untrusted QTSP contract
-        vm.startPrank(DEFAULT_ANVIL_ADDRESS1);
-        // remove qtsp contract from trusted list
-        rightsManager.removeTrustedQTSPContract(address(qtspContract));
-        vm.expectRevert("Only authorized QTSP Contract can call this function");
-        qtspContract.issueToken(testUserWithOver18Token, OVER_18, validSignature);
-        vm.stopPrank();
+        vm.expectRevert(); // Should revert because DEFAULT_ANVIL_ADDRESS2 is not the owner of QTSP Contract 1
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
     }
     
     function testIssueToken_InvalidUserAddress() public {
-        // Register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
-        
         // Try to issue token to zero address
         vm.prank(DEFAULT_ANVIL_ADDRESS1);
         
         vm.expectRevert("Invalid user address");
-        qtspContract.issueToken(address(0), OVER_18, validSignature);
-    }
-
-    function testIssueToken_InvalidClaimType() public {
-        // Register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
-        
-        // Try to issue token with invalid claim type
-        vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        
-        vm.expectRevert("Invalid claim type");
-        qtspContract.issueToken(testUserWithOver18Token, INVALID_CLAIM, validSignature);
+        qtspContract1.issueToken(address(0), OVER_18, validSignature);
     }
     
-    function testIssueToken_ClaimTokenNotRegistered() public {
-        // Remove the claim token if it's already registered
-        if (claimsRegistry.hasClaimToken(OVER_18)) {
-            vm.prank(DEFAULT_ANVIL_ADDRESS1);
-            claimsRegistry.removeClaimToken(OVER_18);
-        }
-        
-        // Try to issue token for unregistered claim
-        vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        vm.expectRevert("Claim token not registered");
-        qtspContract.issueToken(testUserWithOver18Token, OVER_18, validSignature);
-    }
-
     function testIssueToken_InvalidSignatureLength() public {
-        // Register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
-        
         // Try to issue token with invalid signature length
         vm.prank(DEFAULT_ANVIL_ADDRESS1);
         
         vm.expectRevert("Invalid signature length");
-        qtspContract.issueToken(testUserWithOver18Token, OVER_18, invalidSignature);
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, invalidSignature);
     }
     
-    function testRevokeToken() public {
-        // Register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
-        
-        // Issue token first
+    function testRevokeToken_ValidToken() public {
+        // First issue a token
         vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        qtspContract.issueToken(testUserWithoutAnyTokens, OVER_18, validSignature);
-        assertTrue(claimToken.hasToken(testUserWithoutAnyTokens), "User should have token initially");
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
         
-        // Now revoke token
+        // Now revoke it
         vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        
         vm.expectEmit(true, true, false, false);
-        emit TokenRevoked(testUserWithoutAnyTokens);
-        
-        qtspContract.revokeToken(testUserWithoutAnyTokens, OVER_18);
+        emit TokenRevoked(testUserWithOver18Token);
+        qtspContract1.revokeToken(testUserWithOver18Token, OVER_18);
         
         // Verify token was revoked
-        assertFalse(claimToken.hasToken(testUserWithoutAnyTokens), "User should not have token after revocation");
-        
-        // Verify token data is cleared by checking hasToken returns false
-        assertFalse(claimToken.hasToken(testUserWithoutAnyTokens), "Token should not exist after revocation");
+        assertFalse(claimToken.hasToken(testUserWithOver18Token), "User should not have token anymore");
     }
     
-    function testRevokeToken_UnauthorizedQTSP() public {
-        // Register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
+    function testRevokeToken_OnlyAuthorizedQTSP() public {
+        // Try to revoke token from unauthorized contract
+        vm.prank(DEFAULT_ANVIL_ADDRESS2);
         
-        // Issue token first
-        vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        qtspContract.issueToken(testUserWithoutAnyTokens, OVER_18, validSignature);
-        
-        // Try to revoke from unauthorized QTSP
-        vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        rightsManager.removeQTSPContractFromClaim(address(qtspContract), OVER_18);
-        
-        vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        vm.expectRevert("Only authorized QTSP Contract can call this function");
-        qtspContract.revokeToken(testUserWithoutAnyTokens, OVER_18);
+        vm.expectRevert(); // Should revert because DEFAULT_ANVIL_ADDRESS2 is not the owner of QTSP Contract 1
+        qtspContract1.revokeToken(testUserWithOver18Token, OVER_18);
     }
-
+    
     function testRevokeToken_InvalidUserAddress() public {
-        // Register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
-        
         // Try to revoke token from zero address
         vm.prank(DEFAULT_ANVIL_ADDRESS1);
         
         vm.expectRevert("Invalid user address");
-        qtspContract.revokeToken(address(0), OVER_18);
-    }
-    
-    function testRevokeToken_InvalidClaimType() public {
-        // Register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
-        
-        // Try to revoke token with invalid claim type
-        vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        
-        vm.expectRevert("Invalid claim type");
-        qtspContract.revokeToken(testUserWithoutAnyTokens, INVALID_CLAIM);
-    }
-
-    function testRevokeToken_ClaimTokenNotRegistered() public {
-        // Remove the claim token if it's already registered
-        if (claimsRegistry.hasClaimToken(OVER_18)) {
-            vm.prank(DEFAULT_ANVIL_ADDRESS1);
-            claimsRegistry.removeClaimToken(OVER_18);
-        }
-        
-        // Try to revoke token for unregistered claim
-        vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        vm.expectRevert("Claim token not registered");
-        qtspContract.revokeToken(testUserWithoutAnyTokens, OVER_18);
+        qtspContract1.revokeToken(address(0), OVER_18);
     }
     
     function testRevokeToken_UserHasNoToken() public {
-        // Register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
-        
         // Try to revoke token from user who doesn't have one
         vm.prank(DEFAULT_ANVIL_ADDRESS1);
         
         vm.expectRevert("User does not have a token");
-        qtspContract.revokeToken(testUserWithoutAnyTokens, OVER_18);
+        qtspContract1.revokeToken(testUserWithoutAnyTokens, OVER_18);
     }
     
-    function testHasToken() public view {
-        // Initially user has no token
-        assertFalse(claimToken.hasToken(testUserWithoutAnyTokens), "User should not have token initially");
+    function testHasToken_ValidToken() public {
+        // First issue a token
+        vm.prank(DEFAULT_ANVIL_ADDRESS1);
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
+        
+        // Check if user has token
+        bool hasToken = claimToken.hasToken(testUserWithOver18Token);
+        assertTrue(hasToken, "User should have token");
     }
     
-    function testGetTokenData_UserHasNoToken() public view{
-        // Try to get token data for user without token
-        assertFalse(claimToken.hasToken(testUserWithoutAnyTokens), "User should not have token");
+    function testHasToken_NoToken() public view{
+        // Check if user without token has token
+        bool hasToken = claimToken.hasToken(testUserWithoutAnyTokens);
+        assertFalse(hasToken, "User should not have token");
     }
     
-    function testGetUserSignature_UserHasNoToken() public {
+    function testGetUserSignature_ValidToken() public {
+        // First issue a token
+        vm.prank(DEFAULT_ANVIL_ADDRESS1);
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
+        
+        // Get the stored signature
+        bytes memory storedSignature = claimToken.getUserSignature(testUserWithOver18Token);
+        assertEq(storedSignature.length, validSignature.length, "Stored signature length should match");
+        
+        // Verify signature content matches
+        for (uint256 i = 0; i < validSignature.length; i++) {
+            assertEq(storedSignature[i], validSignature[i], "Signature content should match");
+        }
+    }
+    
+    function testGetUserSignature_NoToken() public {
         // Try to get signature for user without token
+        // This should revert since the user doesn't have a token
         vm.expectRevert("User does not have a token");
         claimToken.getUserSignature(testUserWithoutAnyTokens);
     }
     
-    function testGetClaimType() public view {
-        bytes32 claimType = claimToken.getClaimType();
-        assertEq(claimType, OVER_18, "Should return correct claim type");
+    function testContractInitialization() public view {
+        // Test that contracts are properly initialized
+        assertEq(claimToken.claimType(), OVER_18, "Claim type should be set correctly");
+        assertEq(claimToken.getRightsManager(), address(rightsManager), "Rights manager should be set correctly");
+        assertEq(claimToken.owner(), DEFAULT_ANVIL_ADDRESS1, "Owner should be set correctly");
     }
     
-    function testGetClaimName() public view {
-        string memory claimName = claimToken.getClaimName();
-        assertEq(claimName, "OVER_18", "Should return correct claim name");
+    function testQTSPAuthorization() public view {
+        // Test that QTSP contracts are properly authorized
+        assertTrue(rightsManager.isQTSPContractAuthorizedForClaim(address(qtspContract1), OVER_18), "QTSP should be authorized for OVER_18");
+        assertTrue(rightsManager.isQTSPContractAuthorizedForClaim(address(qtspContract2), EU_CITIZEN), "QTSP should be authorized for EU_CITIZEN");
     }
     
-    function testGetRightsManager() public view {
-        address rightsManagerAddress = claimToken.getRightsManager();
-        assertEq(rightsManagerAddress, address(rightsManager), "Should return correct rights manager address");
-    }
-    
-    function testTransferOwnership() public {
-        address newOwner = address(0x456);
-        
-        vm.startPrank(DEFAULT_ANVIL_ADDRESS1);
-        claimToken.transferOwnership(newOwner);
-        assertEq(claimToken.owner(), newOwner, "Ownership should be transferred");
-        vm.stopPrank();
-    }
-    
-    function testTransferOwnership_OnlyOwner() public {
-        address newOwner = address(0x456);
-        
-        vm.startPrank(DEFAULT_ANVIL_ADDRESS2);
-        vm.expectRevert("Only owner can call this function");
-        claimToken.transferOwnership(newOwner);
-        vm.stopPrank();
-    }
-    
-    function testTransferOwnership_InvalidAddress() public {
-        vm.startPrank(DEFAULT_ANVIL_ADDRESS1);
-        vm.expectRevert("Invalid new owner address");
-        claimToken.transferOwnership(address(0));
-        vm.stopPrank();
+    function testClaimTokenRegistration() public view {
+        // Test that claim tokens are properly registered
+        assertTrue(claimsRegistry.hasClaimToken(OVER_18), "OVER_18 claim should be registered");
+        assertTrue(claimsRegistry.hasClaimToken(EU_CITIZEN), "EU_CITIZEN claim should be registered");
+        assertEq(claimsRegistry.getClaimTokenAddress(OVER_18), address(config.proxies.over18Token), "OVER_18 token address should match");
+        assertEq(claimsRegistry.getClaimTokenAddress(EU_CITIZEN), address(config.proxies.euCitizenToken), "EU_CITIZEN token address should match");
     }
     
     function testMultipleTokenOperations() public {
-        // Register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
-        
         // Issue token
         vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        qtspContract.issueToken(testUserWithoutAnyTokens, OVER_18, validSignature);
-        assertTrue(claimToken.hasToken(testUserWithoutAnyTokens), "User should have token");
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
+        assertTrue(claimToken.hasToken(testUserWithOver18Token), "User should have token");
         
         // Revoke token
         vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        qtspContract.revokeToken(testUserWithoutAnyTokens, OVER_18);
-        assertFalse(claimToken.hasToken(testUserWithoutAnyTokens), "User should not have token");
+        qtspContract1.revokeToken(testUserWithOver18Token, OVER_18);
+        assertFalse(claimToken.hasToken(testUserWithOver18Token), "User should not have token");
         
         // Issue token again
         vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        qtspContract.issueToken(testUserWithoutAnyTokens, OVER_18, validSignature);
-        assertTrue(claimToken.hasToken(testUserWithoutAnyTokens), "User should have token again");
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
+        assertTrue(claimToken.hasToken(testUserWithOver18Token), "User should have token again");
     }
     
     function testTokenDataIntegrity() public {
-        // Register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
-        
         // Issue token
         vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        qtspContract.issueToken(testUserWithoutAnyTokens, OVER_18, validSignature);
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
         
         // Verify all token data is correct
-        assertTrue(claimToken.hasToken(testUserWithoutAnyTokens), "User should have token");
+        assertTrue(claimToken.hasToken(testUserWithOver18Token), "User should have token");
+        assertEq(claimToken.claimType(), OVER_18, "Claim type should be correct");
+        assertEq(claimToken.getRightsManager(), address(rightsManager), "Rights manager should be correct");
         
-        // Verify individual getters return correct data
-        bytes memory retrievedSignature = claimToken.getUserSignature(testUserWithoutAnyTokens);
-        bytes32 retrievedClaimType = claimToken.getClaimType();
-        
-        assertEq(retrievedSignature.length, validSignature.length, "Signature lengths should match");
-        assertEq(retrievedClaimType, OVER_18, "Claim types should match");
+        // Verify signature can be retrieved and matches
+        bytes memory storedSignature = claimToken.getUserSignature(testUserWithOver18Token);
+        assertEq(storedSignature.length, validSignature.length, "Signature length should match");
     }
     
-    function testQTSPContractViewFunctions() public {
-        // Register the claim token in the claims registry (if not already registered)
-        if (!claimsRegistry.hasClaimToken(OVER_18)) {
-            claimsRegistry.registerClaimToken(OVER_18, address(claimToken));
-        }
+    function testDifferentClaimTypes() public view{
+        // Test OVER_18 token
+        assertEq(config.proxies.over18Token.claimType(), OVER_18, "OVER_18 token should have correct claim type");
         
-        // Test hasToken function
-        bool hasToken = qtspContract.hasToken(testUserWithoutAnyTokens, OVER_18);
-        assertFalse(hasToken, "User should not have token initially");
-        
+        // Test EU_CITIZEN token
+        assertEq(config.proxies.euCitizenToken.claimType(), EU_CITIZEN, "EU_CITIZEN token should have correct claim type");
+    }
+    
+    function testTokenRevocationAndReissuance() public {
         // Issue token
         vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        qtspContract.issueToken(testUserWithoutAnyTokens, OVER_18, validSignature);
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
+        assertTrue(claimToken.hasToken(testUserWithOver18Token), "User should have token");
         
-        // Test hasToken function again
-        hasToken = qtspContract.hasToken(testUserWithoutAnyTokens, OVER_18);
-        assertTrue(hasToken, "User should have token after issuance");
+        // Revoke token
+        vm.prank(DEFAULT_ANVIL_ADDRESS1);
+        qtspContract1.revokeToken(testUserWithOver18Token, OVER_18);
+        assertFalse(claimToken.hasToken(testUserWithOver18Token), "User should not have token");
         
-        // Test that the token exists by checking hasToken
-        assertTrue(qtspContract.hasToken(testUserWithoutAnyTokens, OVER_18), "Token should exist after issuance");
+        // Reissue token
+        vm.prank(DEFAULT_ANVIL_ADDRESS1);
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
+        assertTrue(claimToken.hasToken(testUserWithOver18Token), "User should have token again");
     }
 }

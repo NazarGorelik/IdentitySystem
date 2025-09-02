@@ -6,10 +6,11 @@ import "../../src/ClaimManagement/ClaimsRegistryContract.sol";
 import "../../src/ClaimManagement/ClaimsRegistry.sol";
 import "../../src/ClaimManagement/ClaimToken.sol";
 import "../../src/QTSPManagement/QTSPRightsManager.sol";
-import "../../script/HelperConfig.s.sol";
+import "../../script/helpers/HelperConfig.s.sol";
+import "../../script/helpers/SharedStructs.s.sol";
 
 contract ClaimsRegistryContractTest is Test {
-    HelperConfig.NetworkConfig public config;
+    SharedStructs.NetworkConfig public config;
     ClaimsRegistryContract public claimsRegistry;
     ClaimToken public over18Token;
     ClaimToken public euCitizenToken;
@@ -30,10 +31,10 @@ contract ClaimsRegistryContractTest is Test {
         HelperConfig helperConfig = new HelperConfig();
         config = helperConfig.getOrCreateNetworkConfig();
 
-        rightsManager = config.rightsManager;
-        claimsRegistry = config.claimsRegistry;
-        over18Token = config.over18Token;
-        euCitizenToken = config.euCitizenToken;
+        rightsManager = config.proxies.rightsManager;
+        claimsRegistry = config.proxies.claimsRegistry;
+        over18Token = config.proxies.over18Token;
+        euCitizenToken = config.proxies.euCitizenToken;
     }
     
     function testConstructor() public view {
@@ -73,7 +74,7 @@ contract ClaimsRegistryContractTest is Test {
     function testRegisterClaimToken_OnlyOwner() public {
         vm.startPrank(DEFAULT_ANVIL_ADDRESS2);
         
-        vm.expectRevert("Only owner can call this function");
+        vm.expectRevert(); // OpenZeppelin Ownable will revert with OwnableUnauthorizedAccount
         claimsRegistry.registerClaimToken(OVER_18, address(over18Token));
         
         vm.stopPrank();
@@ -136,7 +137,7 @@ contract ClaimsRegistryContractTest is Test {
     function testRemoveClaimToken_OnlyOwner() public {
         vm.startPrank(DEFAULT_ANVIL_ADDRESS2);
         
-        vm.expectRevert("Only owner can call this function");
+        vm.expectRevert(); // OpenZeppelin Ownable will revert with OwnableUnauthorizedAccount
         claimsRegistry.removeClaimToken(OVER_18);
         
         vm.stopPrank();
@@ -207,14 +208,14 @@ contract ClaimsRegistryContractTest is Test {
         address newOwner = address(0x456);
         
         vm.startPrank(DEFAULT_ANVIL_ADDRESS2);
-        vm.expectRevert("Only owner can call this function");
+        vm.expectRevert(); // OpenZeppelin Ownable will revert with OwnableUnauthorizedAccount
         claimsRegistry.transferOwnership(newOwner);
         vm.stopPrank();
     }
     
     function testTransferOwnership_InvalidAddress() public {
         vm.startPrank(DEFAULT_ANVIL_ADDRESS1);
-        vm.expectRevert("Invalid new owner address");
+        vm.expectRevert(); // OpenZeppelin Ownable will revert with OwnableInvalidOwner
         claimsRegistry.transferOwnership(address(0));
         vm.stopPrank();
     }

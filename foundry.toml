@@ -4,6 +4,20 @@ out = "out"
 libs = ["lib"]
 solc_version = "0.8.29"
 
+# Dependencies for UUPS upgradeability
+remappings = [
+    "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "lib/foundry-devops/=lib/foundry-devops/",
+]
+
+# File system permissions for foundry-devops
+fs_permissions = [
+    { access = "read", path = "./broadcast" },
+    { access = "read", path = "./reports" },
+]
+
+
 [profile.default.fuzz]
 runs = 1000
 

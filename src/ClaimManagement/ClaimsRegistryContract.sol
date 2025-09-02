@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.29;
 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./ClaimsRegistry.sol";
 
 /**
@@ -9,7 +12,7 @@ import "./ClaimsRegistry.sol";
  * @notice This contract stores the addresses of deployed ClaimToken contracts and provides
  *         bidirectional mapping between claim types and their corresponding token contracts
  */
-contract ClaimsRegistryContract {
+contract ClaimsRegistryContract is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     using ClaimsRegistry for bytes32;
     
     // Bidirectional mapping to ensure unique claim-token relationships
@@ -19,20 +22,22 @@ contract ClaimsRegistryContract {
     // Mapping from ClaimToken address to claim type
     mapping(address => bytes32) public tokenToClaim;
     
-    // Owner of the contract
-    address public owner;
-    
     // Events
     event ClaimTokenRegistered(bytes32 indexed claim, address indexed tokenAddress);
     event ClaimTokenRemoved(bytes32 indexed claim, address indexed tokenAddress);
     
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
-        owner = msg.sender;
+        _disableInitializers();
     }
     
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call this function");
-        _;
+    /**
+     * @dev Initializes the contract
+     * @param initialOwner The initial owner of the contract
+     */
+    function initialize(address initialOwner) public initializer {
+        __Ownable_init(initialOwner);
+        __UUPSUpgradeable_init();
     }
     
     /**
@@ -106,12 +111,8 @@ contract ClaimsRegistryContract {
     }
     
     /**
-     * @dev Transfer ownership of the contract
-     * @param newOwner The new owner address
-     * @notice Only the current owner can call this function
+     * @dev Required by UUPS to authorize upgrades
+     * @param newImplementation The new implementation address
      */
-    function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "Invalid new owner address");
-        owner = newOwner;
-    }
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 } 

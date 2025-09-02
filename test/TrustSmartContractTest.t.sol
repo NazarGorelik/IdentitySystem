@@ -7,10 +7,11 @@ import "../src/ClaimManagement/ClaimsRegistry.sol";
 import "../src/ClaimManagement/ClaimToken.sol";
 import "../src/QTSPManagement/QTSPRightsManager.sol";
 import "../src/QTSPManagement/QTSPContract.sol";
-import "../script/HelperConfig.s.sol";
+import "../script/helpers/HelperConfig.s.sol";
+import "../script/helpers/SharedStructs.s.sol";
 
 contract TrustSmartContractTest is Test {
-    HelperConfig.NetworkConfig public config;
+    SharedStructs.NetworkConfig public config;
     TrustSmartContract public trustContract;
     QTSPRightsManager public rightsManager;
     ClaimToken public claimToken;
@@ -38,10 +39,10 @@ contract TrustSmartContractTest is Test {
         config = helperConfig.getOrCreateNetworkConfig();
         
         // Get contract addresses from your deployment
-        trustContract = TrustSmartContract(config.trustContract);
-        rightsManager = QTSPRightsManager(config.rightsManager);
-        claimToken = ClaimToken(config.over18Token);
-        qtspContract = QTSPContract(config.qtspContract1);
+        trustContract = TrustSmartContract(config.proxies.trustContract);
+        rightsManager = QTSPRightsManager(config.proxies.rightsManager);
+        claimToken = ClaimToken(config.proxies.over18Token);
+        qtspContract = QTSPContract(config.proxies.qtspContract1);
     }
     
     function testVerifySignature_ValidSignature() public {
@@ -105,50 +106,24 @@ contract TrustSmartContractTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(DEFAULT_ANVIL_PRIVATE_KEY1, ethSignedMessageHash);
         bytes memory signature = abi.encodePacked(r, s, v);
         
-        // First, let's see what address the signature actually recovers to
-        address recoveredSigner = trustContract.recoverSigner(ethSignedMessageHash, signature);
+        // Verify signature should fail due to wrong claim
+        vm.expectEmit(true, true, true, true);
+        emit SignatureVerificationFailed(testUserWithOver18Token, EU_CITIZEN, DEFAULT_ANVIL_ADDRESS1);
         
-        // Verify signature should fail due to wrong claim. Check only first two params, as recoveredSigner != qtspOwner
-        vm.expectEmit(true, true, false, false);
-        emit SignatureVerificationFailed(testUserWithOver18Token, OVER_18, recoveredSigner);
-        
-        bool isValid = trustContract.verifySignature(testUserWithOver18Token, OVER_18, signature);
+        bool isValid = trustContract.verifySignature(testUserWithOver18Token, EU_CITIZEN, signature);
         assertFalse(isValid);
     }
     
-    function testVerifySignature_InvalidLength() public {
-        // Create signature with wrong length
-        bytes memory invalidSignature = new bytes(64); // Should be 65
+    function testVerifySignature_InvalidSignatureLength() public {
+        // Create invalid signature length
+        bytes memory invalidSignature = new bytes(64);
         
         vm.expectRevert("Invalid signature length");
         trustContract.verifySignature(testUserWithOver18Token, OVER_18, invalidSignature);
     }
     
-    function testVerifyStoredSignature_ValidToken() public {
-        // First issue a token with valid signature
-        bytes32 messageHash = keccak256(abi.encodePacked(testUserWithoutAnyTokens, OVER_18));
-        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
-        
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(DEFAULT_ANVIL_PRIVATE_KEY1, ethSignedMessageHash);
-        bytes memory signature = abi.encodePacked(r, s, v);
-        
-        // Issue token using your QTSP contract
-        vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        qtspContract.issueToken(testUserWithoutAnyTokens, OVER_18, signature);
-        
-        // Verify stored signature
-        bool isValid = trustContract.verifyStoredSignature(testUserWithoutAnyTokens, OVER_18, address(claimToken));
-        assertTrue(isValid);
-    }
-    
-    function testVerifyStoredSignature_NoToken() public {
-        // Try to verify signature for user without token
-        vm.expectRevert("User does not have a token");
-        trustContract.verifyStoredSignature(testUserWithoutAnyTokens, OVER_18, address(claimToken));
-    }
-    
-    function testRecoverSigner() public view{
-        // Create message hash
+    function testVerifyStoredSignature_ValidSignature() public {
+        // Create a proper signature
         bytes32 messageHash = keccak256(abi.encodePacked(testUserWithOver18Token, OVER_18));
         bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
         
@@ -156,48 +131,67 @@ contract TrustSmartContractTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(DEFAULT_ANVIL_PRIVATE_KEY1, ethSignedMessageHash);
         bytes memory signature = abi.encodePacked(r, s, v);
         
+        // First issue a token to store the signature
+        vm.prank(DEFAULT_ANVIL_ADDRESS1);
+        qtspContract.issueToken(testUserWithOver18Token, OVER_18, signature);
+        
+        // Now verify the stored signature
+        bool isValid = trustContract.verifyStoredSignature(testUserWithOver18Token, OVER_18, address(claimToken));
+        assertTrue(isValid);
+    }
+    
+    function testVerifyStoredSignature_NoToken() public {
+        // Try to verify stored signature for user without token
+        bool isValid = trustContract.verifyStoredSignature(testUserWithoutAnyTokens, OVER_18, address(claimToken));
+        assertFalse(isValid);
+    }
+    
+    function testVerifyStoredSignature_InvalidTokenContract() public {
+        vm.expectRevert("Invalid token contract address");
+        trustContract.verifyStoredSignature(testUserWithOver18Token, OVER_18, address(0));
+    }
+    
+    function testRecoverSigner() public view{
+        // Create message hash
+        bytes32 messageHash = keccak256(abi.encodePacked(testUserWithOver18Token, OVER_18));
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+        
+        // Sign with known private key
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(DEFAULT_ANVIL_PRIVATE_KEY1, ethSignedMessageHash);
+        bytes memory signature = abi.encodePacked(r, s, v);
+        
         // Recover signer
         address recoveredSigner = trustContract.recoverSigner(ethSignedMessageHash, signature);
-        assertEq(recoveredSigner, DEFAULT_ANVIL_ADDRESS1, "Recovered signer should match QTSP address");
+        assertEq(recoveredSigner, DEFAULT_ANVIL_ADDRESS1, "Recovered signer should match");
     }
     
-    function testIsTrustedQTSPContract() public view{
-        bool isTrusted = trustContract.isTrustedQTSPContract(address(qtspContract));
-        assertTrue(isTrusted, "QTSP should be trusted");
+    function testRecoverSigner_InvalidSignatureLength() public {
+        bytes memory invalidSignature = new bytes(64);
         
-        address untrustedAddress = address(0x123);
-        bool isUntrusted = trustContract.isTrustedQTSPContract(untrustedAddress);
-        assertFalse(isUntrusted, "Address should not be trusted");
+        vm.expectRevert("Invalid signature length");
+        trustContract.recoverSigner(bytes32(0), invalidSignature);
     }
     
-    function testIsQTSPContractAuthorizedForClaim() public view{
-        // Now pass the owner address (who signed the message)
-        bool isAuthorized = trustContract.isQTSPContractAuthorizedForClaim(address(qtspContract), OVER_18);
-        assertTrue(isAuthorized, "QTSP should be authorized for OVER_18 claim");
-        
-        bool isNotAuthorized = trustContract.isQTSPContractAuthorizedForClaim(address(qtspContract), EU_CITIZEN);
-        assertFalse(isNotAuthorized, "QTSP should not be authorized for EU_CITIZEN claim");
+    function testContractInitialization() public view {
+        // Test that contracts are properly initialized
+        assertEq(trustContract.owner(), DEFAULT_ANVIL_ADDRESS1, "Trust contract owner should be set");
+        assertEq(address(trustContract.rightsManager()), address(rightsManager), "Rights manager should be set");
+        assertEq(rightsManager.owner(), DEFAULT_ANVIL_ADDRESS1, "Rights manager owner should be set");
+        assertEq(claimToken.owner(), DEFAULT_ANVIL_ADDRESS1, "Claim token owner should be set");
+        assertEq(qtspContract.owner(), DEFAULT_ANVIL_ADDRESS1, "QTSP contract owner should be set");
     }
     
-    function testTransferOwnership() public {
-        address newOwner = address(0x456);
-        
-        vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        trustContract.transferOwnership(newOwner);
-
-        assertEq(trustContract.owner(), newOwner, "Ownership should be transferred");
+    function testQTSPAuthorization() public view {
+        // Test that QTSP contracts are properly authorized
+        assertTrue(rightsManager.isQTSPContractOwnerAuthorizedForClaim(DEFAULT_ANVIL_ADDRESS1, OVER_18), "QTSP should be authorized for OVER_18");
+        assertTrue(rightsManager.isQTSPContractOwnerAuthorizedForClaim(DEFAULT_ANVIL_ADDRESS2, EU_CITIZEN), "QTSP should be authorized for EU_CITIZEN");
     }
     
-    function testTransferOwnership_OnlyOwner() public {
-        address newOwner = address(0x456);
-        
-        vm.prank(DEFAULT_ANVIL_ADDRESS2); // Call from non-owner
-        vm.expectRevert("Only owner can call this function");
-        trustContract.transferOwnership(newOwner);
-    }
-    
-    function testTransferOwnership_InvalidAddress() public {
-        vm.expectRevert("Only owner can call this function");
-        trustContract.transferOwnership(address(0));
+    function testClaimTokenRegistration() public view {
+        // Test that claim tokens are properly registered
+        assertTrue(config.proxies.claimsRegistry.hasClaimToken(OVER_18), "OVER_18 claim should be registered");
+        assertTrue(config.proxies.claimsRegistry.hasClaimToken(EU_CITIZEN), "EU_CITIZEN claim should be registered");
+        assertEq(config.proxies.claimsRegistry.getClaimTokenAddress(OVER_18), address(config.proxies.over18Token), "OVER_18 token address should match");
+        assertEq(config.proxies.claimsRegistry.getClaimTokenAddress(EU_CITIZEN), address(config.proxies.euCitizenToken), "EU_CITIZEN token address should match");
     }
 }

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.29;
 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "../ClaimManagement/ClaimsRegistry.sol";
 
 /**
@@ -9,7 +12,7 @@ import "../ClaimManagement/ClaimsRegistry.sol";
  * @notice This contract grants granular permissions to QTSP Contracts for managing specific claims
  *         and maintains the trust relationships between QTSP contracts and claim types
  */
-contract QTSPRightsManager {
+contract QTSPRightsManager is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     using ClaimsRegistry for bytes32;
     
     // Mapping: claim type => array of QTSP Contract addresses that can manage it
@@ -36,16 +39,18 @@ contract QTSPRightsManager {
     event QTSPContractTrusted(address indexed qtspContract);
     event QTSPContractUntrusted(address indexed qtspContract);
     
-    // Owner of the contract (who can add/remove QTSP Contracts)
-    address public owner;
-    
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
-        owner = msg.sender;
+        _disableInitializers();
     }
     
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call this function");
-        _;
+    /**
+     * @dev Initializes the contract
+     * @param initialOwner The initial owner of the contract
+     */
+    function initialize(address initialOwner) public initializer {
+        __Ownable_init(initialOwner);
+        __UUPSUpgradeable_init();
     }
     
     /**
@@ -252,12 +257,8 @@ contract QTSPRightsManager {
     }
     
     /**
-     * @dev Transfer ownership of the contract
-     * @param newOwner The new owner address
-     * @notice Only the current owner can call this function
+     * @dev Required by UUPS to authorize upgrades
+     * @param newImplementation The new implementation address
      */
-    function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "Invalid new owner address");
-        owner = newOwner;
-    }
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 } 

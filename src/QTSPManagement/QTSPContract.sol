@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.29;
 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "../ClaimManagement/ClaimsRegistryContract.sol";
 import "../ClaimManagement/ClaimToken.sol";
 
@@ -10,31 +13,33 @@ import "../ClaimManagement/ClaimToken.sol";
  * @notice This contract manages the issuance and revocation of claim tokens through
  *         authorized QTSP contracts that have been registered in the system
  */
-contract QTSPContract {
+contract QTSPContract is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     using ClaimsRegistry for bytes32;
     
     // Reference to the Claims Registry Contract
     ClaimsRegistryContract public claimsRegistryContract;
 
-    // Owner of the contract
-    address public owner;
-    
     // Events
     event TokenIssued(address indexed user, bytes32 indexed claim, address indexed qtsp);
     event TokenRevoked(address indexed user, bytes32 indexed claim, address indexed qtsp);
     
-    /**
-     * @dev Constructor initializes the contract with required dependencies
-     * @param _claimsRegistryContract Address of the Claims Registry Contract
-     */
-    constructor(address _claimsRegistryContract) {
-        owner = msg.sender;
-        claimsRegistryContract = ClaimsRegistryContract(_claimsRegistryContract);
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
     
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call this function");
-        _;
+    /**
+     * @dev Initializes the contract with required dependencies
+     * @param _claimsRegistryContractAddress Address of the Claims Registry Contract
+     * @param initialOwner The initial owner of the contract
+     */
+    function initialize(
+        address _claimsRegistryContractAddress,
+        address initialOwner
+    ) public initializer {
+        claimsRegistryContract = ClaimsRegistryContract(_claimsRegistryContractAddress);
+        __Ownable_init(initialOwner);
+        __UUPSUpgradeable_init();
     }
     
     /**
@@ -99,4 +104,10 @@ contract QTSPContract {
         
         return ClaimToken(tokenContract).hasToken(user);
     }
+    
+    /**
+     * @dev Required by UUPS to authorize upgrades
+     * @param newImplementation The new implementation address
+     */
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 } 

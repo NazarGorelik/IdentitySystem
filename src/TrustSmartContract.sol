@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.29;
 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./ClaimManagement/ClaimsRegistry.sol";
 import "./ClaimManagement/ClaimToken.sol";
 import "./QTSPManagement/QTSPRightsManager.sol";
@@ -11,7 +14,7 @@ import "./QTSPManagement/QTSPRightsManager.sol";
  * @notice This contract verifies cryptographic signatures from authorized QTSP Contracts
  *         and provides trust verification services for the identity system
  */
-contract TrustSmartContract {
+contract TrustSmartContract is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     using ClaimsRegistry for bytes32;
     
     // Reference to the QTSP Rights Manager for authorization checks
@@ -21,21 +24,20 @@ contract TrustSmartContract {
     event SignatureVerified(address indexed user, bytes32 indexed claim, address indexed qtspContractOwner);
     event SignatureVerificationFailed(address indexed user, bytes32 indexed claim, address indexed qtspContractOwner);
     
-    // Owner of the contract
-    address public owner;
-    
-    /**
-     * @dev Constructor initializes the contract with the QTSP Rights Manager
-     * @param _rightsManager Address of the QTSP Rights Manager contract
-     */
-    constructor(address _rightsManager) {
-        owner = msg.sender;
-        rightsManager = QTSPRightsManager(_rightsManager);
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
     
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call this function");
-        _;
+    /**
+     * @dev Initializes the contract with the QTSP Rights Manager
+     * @param _rightsManager Address of the QTSP Rights Manager contract
+     * @param initialOwner The initial owner of the contract
+     */
+    function initialize(address _rightsManager, address initialOwner) public initializer {
+        rightsManager = QTSPRightsManager(_rightsManager);
+        __Ownable_init(initialOwner);
+        __UUPSUpgradeable_init();
     }
     
     /**
@@ -91,12 +93,14 @@ contract TrustSmartContract {
         
         // Get the stored signature from the ClaimToken contract
         ClaimToken tokenContractInstance = ClaimToken(tokenContract);
-        bytes memory storedSignature = tokenContractInstance.getUserSignature(user);
         
-        // Check if user has token and signature exists
-        if (!tokenContractInstance.hasToken(user) || storedSignature.length == 0) {
+        // Check if user has token first
+        if (!tokenContractInstance.hasToken(user)) {
             return false;
         }
+        
+        // Get the stored signature (this will not revert now since we checked hasToken)
+        bytes memory storedSignature = tokenContractInstance.getUserSignature(user);
         
         // Verify the stored signature
         return verifySignature(user, claim, storedSignature);
@@ -161,12 +165,8 @@ contract TrustSmartContract {
     }
     
     /**
-     * @dev Transfer ownership of the contract
-     * @param newOwner The new owner address
-     * @notice Only the current owner can call this function
+     * @dev Required by UUPS to authorize upgrades
+     * @param newImplementation The new implementation address
      */
-    function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "Invalid new owner address");
-        owner = newOwner;
-    }
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 } 

@@ -5,6 +5,7 @@ import "./ClaimManagement/ClaimsRegistry.sol";
 import "./ClaimManagement/ClaimsRegistryContract.sol";
 import "./QTSPManagement/QTSPContract.sol";
 import "./TrustSmartContract.sol";
+import "forge-std/console.sol";
 
 /**
  * @title Restricted Smart Contract
@@ -52,17 +53,29 @@ contract RestrictedSmartContract {
      *         before granting access to age-restricted services
      */
     function accessAgeRestrictedService(address user) external {
+        console.log("=== accessAgeRestrictedService called ===");
+        console.log("User address:", user);
+        
         require(user != address(0), "Invalid user address");
+        console.log("User address is valid");
         
         // Get the token contract address for the OVER_18 claim
         address tokenContract = claimsRegistryContract.getClaimTokenAddress(ClaimsRegistry.OVER_18);
+        console.log("Token contract address:", tokenContract);
+        
+        require(tokenContract != address(0), "OVER_18 claim token not registered");
+        console.log("OVER_18 claim token is registered");
         
         // Verify the stored signature using TrustSmartContract
         bool isValidSignature = trustContract.verifyStoredSignature(user, ClaimsRegistry.OVER_18, tokenContract);
+        console.log("Signature valid:", isValidSignature);
+        
         require(isValidSignature, "Invalid signature from QTSP");
+        console.log("Signature verification passed");
         
         emit AccessGranted(user, ClaimsRegistry.OVER_18);
         emit ServiceUsed(user, "Age Restricted Service");
+        console.log("Access granted and events emitted");
     }
     
     /**

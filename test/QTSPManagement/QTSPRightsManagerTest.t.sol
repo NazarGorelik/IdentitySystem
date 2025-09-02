@@ -8,10 +8,11 @@ import "../../src/ClaimManagement/ClaimsRegistry.sol";
 import "../../src/ClaimManagement/ClaimToken.sol";
 import "../../src/ClaimManagement/ClaimsRegistryContract.sol";
 import "../../src/TrustSmartContract.sol";
-import "../../script/HelperConfig.s.sol";
+import "../../script/helpers/HelperConfig.s.sol";
+import "../../script/helpers/SharedStructs.s.sol";
 
 contract QTSPRightsManagerTest is Test {
-    HelperConfig.NetworkConfig public config;
+    SharedStructs.NetworkConfig public config;
     QTSPRightsManager public rightsManager;
     ClaimsRegistryContract public claimsRegistry;
     TrustSmartContract public trustContract;
@@ -43,13 +44,13 @@ contract QTSPRightsManagerTest is Test {
         config = helperConfig.getOrCreateNetworkConfig();
         
         // Get contract addresses from deployment
-        rightsManager = QTSPRightsManager(config.rightsManager);
-        claimsRegistry = ClaimsRegistryContract(config.claimsRegistry);
-        trustContract = TrustSmartContract(config.trustContract);
-        qtspContract1 = QTSPContract(config.qtspContract1);
-        qtspContract2 = QTSPContract(config.qtspContract2);
-        over18Token = ClaimToken(config.over18Token);
-        euCitizenToken = ClaimToken(config.euCitizenToken);
+        rightsManager = QTSPRightsManager(config.proxies.rightsManager);
+        claimsRegistry = ClaimsRegistryContract(config.proxies.claimsRegistry);
+        trustContract = TrustSmartContract(config.proxies.trustContract);
+        qtspContract1 = QTSPContract(config.proxies.qtspContract1);
+        qtspContract2 = QTSPContract(config.proxies.qtspContract2);
+        over18Token = ClaimToken(config.proxies.over18Token);
+        euCitizenToken = ClaimToken(config.proxies.euCitizenToken);
     }
     
     // Test constructor and initial state
@@ -87,7 +88,7 @@ contract QTSPRightsManagerTest is Test {
         address newQTSOwner = address(0x456);
         
         vm.prank(unauthorizedUser);
-        vm.expectRevert("Only owner can call this function");
+        vm.expectRevert(); // OpenZeppelin Ownable will revert with OwnableUnauthorizedAccount
         rightsManager.addTrustedQTSPContract(newQTSP, newQTSOwner);
     }
     
@@ -147,7 +148,7 @@ contract QTSPRightsManagerTest is Test {
     
     function testRemoveTrustedQTSPContract_OnlyOwner() public {
         vm.prank(unauthorizedUser);
-        vm.expectRevert("Only owner can call this function");
+        vm.expectRevert(); // OpenZeppelin Ownable will revert with OwnableUnauthorizedAccount
         rightsManager.removeTrustedQTSPContract(address(qtspContract1));
     }
     
@@ -197,7 +198,7 @@ contract QTSPRightsManagerTest is Test {
     
     function testAddQTSPContractToClaim_OnlyOwner() public {
         vm.prank(unauthorizedUser);
-        vm.expectRevert("Only owner can call this function");
+        vm.expectRevert(); // OpenZeppelin Ownable will revert with OwnableUnauthorizedAccount
         rightsManager.addQTSPContractToClaim(address(qtspContract1), OVER_18);
     }
     
@@ -251,7 +252,7 @@ contract QTSPRightsManagerTest is Test {
     
     function testRemoveQTSPContractFromClaim_OnlyOwner() public {
         vm.prank(unauthorizedUser);
-        vm.expectRevert("Only owner can call this function");
+        vm.expectRevert(); // OpenZeppelin Ownable will revert with OwnableUnauthorizedAccount
         rightsManager.removeQTSPContractFromClaim(address(qtspContract1), OVER_18);
     }
     
@@ -400,13 +401,13 @@ contract QTSPRightsManagerTest is Test {
         address newOwner = address(0x789);
         
         vm.prank(unauthorizedUser);
-        vm.expectRevert("Only owner can call this function");
+        vm.expectRevert(); // OpenZeppelin Ownable will revert with OwnableUnauthorizedAccount
         rightsManager.transferOwnership(newOwner);
     }
     
     function testTransferOwnership_InvalidAddress() public {
         vm.prank(DEFAULT_ANVIL_ADDRESS1);
-        vm.expectRevert("Invalid new owner address");
+        vm.expectRevert(); // OpenZeppelin Ownable will revert with OwnableInvalidOwner
         rightsManager.transferOwnership(address(0));
     }
     

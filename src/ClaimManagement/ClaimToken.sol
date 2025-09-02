@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.29;
 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./ClaimsRegistry.sol";
 import "../QTSPManagement/QTSPRightsManager.sol";
 
@@ -10,7 +13,7 @@ import "../QTSPManagement/QTSPRightsManager.sol";
  * @notice Each claim type gets its own token contract that stores claimType and signature
  *         for individual users, enabling decentralized identity verification
  */
-contract ClaimToken {
+contract ClaimToken is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     using ClaimsRegistry for bytes32;
     
     // The claim type this token represents (bytes32)
@@ -26,26 +29,28 @@ contract ClaimToken {
     event TokenIssued(address indexed user, bytes32 claimType, bytes signature);
     event TokenRevoked(address indexed user);
     
-    // Owner of the contract
-    address public owner;
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
     
     /**
-     * @dev Constructor sets the claim type and validates it against ClaimsRegistry
+     * @dev Initializes the contract
      * @param _claimType The claim type this token represents (must be valid in ClaimsRegistry)
      * @param _rightsManager The QTSP Rights Manager address for authorization checks
-     * @notice Validates the claim type and sets up the contract with required dependencies
+     * @param initialOwner The initial owner of the contract
      */
-    constructor(bytes32 _claimType, address _rightsManager) {
+    function initialize(
+        bytes32 _claimType, 
+        address _rightsManager, 
+        address initialOwner
+    ) public initializer {
         require(ClaimsRegistry.isValidClaim(_claimType), "Invalid claim type");
         require(_rightsManager != address(0), "Invalid rights manager address");
         claimType = _claimType;
         rightsManager = QTSPRightsManager(_rightsManager);
-        owner = msg.sender;
-    }
-    
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call this function");
-        _;
+        __Ownable_init(initialOwner);
+        __UUPSUpgradeable_init();
     }
     
     modifier onlyAuthorizedQTSPContract() {
@@ -130,12 +135,8 @@ contract ClaimToken {
     }
     
     /**
-     * @dev Transfer ownership of the contract
-     * @param newOwner The new owner address
-     * @notice Only the current owner can call this function
+     * @dev Required by UUPS to authorize upgrades
+     * @param newImplementation The new implementation address
      */
-    function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "Invalid new owner address");
-        owner = newOwner;
-    }
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 } 
