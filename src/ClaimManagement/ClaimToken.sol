@@ -65,7 +65,7 @@ contract ClaimToken is Initializable, UUPSUpgradeable, OwnableUpgradeable {
      * @dev Issue token to a user (only callable by authorized QTSP Contracts)
      * @param user The user address to issue the token to
      * @param signature The cryptographic signature to store with the token
-     * @notice This function mints 1 ERC20 token and stores a signature that proves the user's claim
+     * @notice This function stores a signature that proves the user's claim
      *         has been verified by an authorized QTSP Contract
      */
     function issueToken(address user, bytes memory signature) external onlyAuthorizedQTSPContract {
@@ -80,7 +80,7 @@ contract ClaimToken is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     /**
      * @dev Revoke token from a user (only callable by authorized QTSP Contracts)
      * @param user The user address to revoke the token from
-     * @notice This function burns the ERC20 token and removes the stored signature, 
+     * @notice This function removes the stored signature, 
      *         effectively revoking the user's verified claim
      */
     function revokeToken(address user) external onlyAuthorizedQTSPContract {
