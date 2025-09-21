@@ -16,9 +16,6 @@ import "forge-std/console.sol";
 contract RestrictedSmartContract {
     using ClaimsRegistry for bytes32;
     
-    // QTSP Contract for claim verification
-    ClaimsRegistryContract public claimsRegistryContract;
-    
     // Trust Smart Contract for signature verification
     TrustSmartContract public trustContract;
     
@@ -32,11 +29,9 @@ contract RestrictedSmartContract {
 
     /**
      * @dev Constructor initializes the contract with required dependencies
-     * @param _claimsRegistryContract Address of the Claims Registry Contract
      * @param _trustContract Address of the Trust Smart Contract
      */
-    constructor(address _claimsRegistryContract, address _trustContract) {
-        claimsRegistryContract = ClaimsRegistryContract(_claimsRegistryContract);
+    constructor(address _trustContract) {
         trustContract = TrustSmartContract(_trustContract);
         owner = msg.sender;
     }
@@ -53,29 +48,14 @@ contract RestrictedSmartContract {
      *         before granting access to age-restricted services
      */
     function accessAgeRestrictedService(address user) external {
-        console.log("=== accessAgeRestrictedService called ===");
-        console.log("User address:", user);
-        
         require(user != address(0), "Invalid user address");
-        console.log("User address is valid");
         
-        // Get the token contract address for the OVER_18 claim
-        address tokenContract = claimsRegistryContract.getClaimTokenAddress(ClaimsRegistry.OVER_18);
-        console.log("Token contract address:", tokenContract);
-        
-        require(tokenContract != address(0), "OVER_18 claim token not registered");
-        console.log("OVER_18 claim token is registered");
-        
-        // Verify the stored signature using TrustSmartContract
-        bool isValidSignature = trustContract.verifyStoredSignature(user, ClaimsRegistry.OVER_18, tokenContract);
-        console.log("Signature valid:", isValidSignature);
-        
+        // Verify the signature using TrustSmartContract (automatically handles stored signatures)
+        bool isValidSignature = trustContract.verifySignature(user, ClaimsRegistry.OVER_18);
         require(isValidSignature, "Invalid signature from QTSP");
-        console.log("Signature verification passed");
         
         emit AccessGranted(user, ClaimsRegistry.OVER_18);
         emit ServiceUsed(user, "Age Restricted Service");
-        console.log("Access granted and events emitted");
     }
     
     /**
@@ -87,11 +67,8 @@ contract RestrictedSmartContract {
     function accessEUCitizenService(address user) external {
         require(user != address(0), "Invalid user address");
         
-        // Get the token contract address for the EU_CITIZEN claim
-        address tokenContract = claimsRegistryContract.getClaimTokenAddress(ClaimsRegistry.EU_CITIZEN);
-        
-        // Verify the stored signature using TrustSmartContract
-        bool isValidSignature = trustContract.verifyStoredSignature(user, ClaimsRegistry.EU_CITIZEN, tokenContract);
+        // Verify the signature using TrustSmartContract (automatically handles stored signatures)
+        bool isValidSignature = trustContract.verifySignature(user, ClaimsRegistry.EU_CITIZEN);
         require(isValidSignature, "Invalid signature from QTSP");
         
         emit AccessGranted(user, ClaimsRegistry.EU_CITIZEN);
@@ -107,14 +84,8 @@ contract RestrictedSmartContract {
      *         specified claim from an authorized QTSP Contract
      */
     function canAccessService(address user, bytes32 claim) external returns (bool) {
-        // Get the token contract address for the specified claim
-        address tokenContract = claimsRegistryContract.getClaimTokenAddress(claim);
-        if (tokenContract == address(0)) {
-            return false;
-        }
-        
-        // Verify the stored signature using TrustSmartContract
-        return trustContract.verifyStoredSignature(user, claim, tokenContract);
+        // Verify the signature using TrustSmartContract (automatically handles stored signatures)
+        return trustContract.verifySignature(user, claim);
     }
     
     /**

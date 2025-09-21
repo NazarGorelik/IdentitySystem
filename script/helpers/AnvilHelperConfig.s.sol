@@ -51,7 +51,6 @@ contract AnvilHelperConfig is Script {
         ClaimToken over18TokenImpl = new ClaimToken();
         ClaimToken euCitizenTokenImpl = new ClaimToken();
         RestrictedSmartContract restrictedContractImpl = new RestrictedSmartContract(
-            address(0), // Will be set after proxy deployment
             address(0)  // Will be set after proxy deployment
         );
         
@@ -75,14 +74,13 @@ contract AnvilHelperConfig is Script {
         
         ERC1967Proxy rightsManagerProxy = _deployRightsManagerProxy(impls.rightsManagerImpl, DEFAULT_ANVIL_ADDRESS1);
         ERC1967Proxy claimsRegistryProxy = _deployClaimsRegistryProxy(impls.claimsRegistryImpl, DEFAULT_ANVIL_ADDRESS1);
-        ERC1967Proxy trustContractProxy = _deployTrustContractProxy(impls.trustContractImpl, address(rightsManagerProxy), DEFAULT_ANVIL_ADDRESS1);
+        ERC1967Proxy trustContractProxy = _deployTrustContractProxy(impls.trustContractImpl, address(rightsManagerProxy), address(claimsRegistryProxy), DEFAULT_ANVIL_ADDRESS1);
         ERC1967Proxy qtspContract1Proxy = _deployQTSPContract1Proxy(impls.qtspContract1Impl, address(claimsRegistryProxy), DEFAULT_ANVIL_ADDRESS1);
         ERC1967Proxy qtspContract2Proxy = _deployQTSPContract2Proxy(impls.qtspContract2Impl, address(claimsRegistryProxy), DEFAULT_ANVIL_ADDRESS2);
         ERC1967Proxy over18TokenProxy = _deployOver18TokenProxy(impls.over18TokenImpl, address(rightsManagerProxy), DEFAULT_ANVIL_ADDRESS1);
         ERC1967Proxy euCitizenTokenProxy = _deployEuCitizenTokenProxy(impls.euCitizenTokenImpl, address(rightsManagerProxy), DEFAULT_ANVIL_ADDRESS1);
         
         RestrictedSmartContract restrictedContract = new RestrictedSmartContract(
-            address(claimsRegistryProxy),
             address(trustContractProxy)
         );
         
@@ -115,8 +113,8 @@ contract AnvilHelperConfig is Script {
         return new ERC1967Proxy(address(impl), data);
     }
     
-    function _deployTrustContractProxy(TrustSmartContract impl, address rightsManager, address owner) private returns (ERC1967Proxy) {
-        bytes memory data = abi.encodeWithSelector(TrustSmartContract.initialize.selector, rightsManager, owner);
+    function _deployTrustContractProxy(TrustSmartContract impl, address rightsManager, address claimsRegistry, address owner) private returns (ERC1967Proxy) {
+        bytes memory data = abi.encodeWithSelector(TrustSmartContract.initialize.selector, rightsManager, claimsRegistry, owner);
         return new ERC1967Proxy(address(impl), data);
     }
     

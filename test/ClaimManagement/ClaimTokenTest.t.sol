@@ -269,4 +269,38 @@ contract ClaimTokenTest is Test {
         qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
         assertTrue(claimToken.hasToken(testUserWithOver18Token), "User should have token again");
     }
+    
+    function testIssueTokenPreventsDuplicateTokens() public {
+        // Issue token first
+        vm.prank(DEFAULT_ANVIL_ADDRESS1);
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
+        
+        // Try to issue token again - should fail
+        vm.prank(DEFAULT_ANVIL_ADDRESS1);
+        vm.expectRevert("User already has a token");
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
+        
+        // User should still have token
+        assertTrue(claimToken.hasToken(testUserWithOver18Token), "User should still have token");
+    }
+    
+    function testCustomTokenIntegrationWithExistingFunctionality() public {
+        // Issue token
+        vm.prank(DEFAULT_ANVIL_ADDRESS1);
+        qtspContract1.issueToken(testUserWithOver18Token, OVER_18, validSignature);
+        
+        // All existing functionality should still work
+        assertTrue(claimToken.hasToken(testUserWithOver18Token), "hasToken should work");
+        
+        // Signature should still be retrievable
+        bytes memory signature = claimToken.getUserSignature(testUserWithOver18Token);
+        assertEq(signature.length, 65, "Signature should be retrievable");
+        
+        // Revoke token
+        vm.prank(DEFAULT_ANVIL_ADDRESS1);
+        qtspContract1.revokeToken(testUserWithOver18Token, OVER_18);
+        
+        // All checks should reflect revocation
+        assertFalse(claimToken.hasToken(testUserWithOver18Token), "hasToken should return false");
+    }
 }

@@ -5,6 +5,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./ClaimManagement/ClaimsRegistry.sol";
+import "./ClaimManagement/ClaimsRegistryContract.sol";
 import "./ClaimManagement/ClaimToken.sol";
 import "./QTSPManagement/QTSPRightsManager.sol";
 
@@ -20,6 +21,9 @@ contract TrustSmartContract is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     // Reference to the QTSP Rights Manager for authorization checks
     QTSPRightsManager public rightsManager;
     
+    // Reference to the Claims Registry Contract for token address lookup
+    ClaimsRegistryContract public claimsRegistryContract;
+    
     // Events
     event SignatureVerified(address indexed user, bytes32 indexed claim, address indexed qtspContractOwner);
     event SignatureVerificationFailed(address indexed user, bytes32 indexed claim, address indexed qtspContractOwner);
@@ -30,30 +34,70 @@ contract TrustSmartContract is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     }
     
     /**
-     * @dev Initializes the contract with the QTSP Rights Manager
+     * @dev Initializes the contract with the QTSP Rights Manager and Claims Registry Contract
      * @param _rightsManager Address of the QTSP Rights Manager contract
+     * @param _claimsRegistryContract Address of the Claims Registry Contract
      * @param initialOwner The initial owner of the contract
      */
-    function initialize(address _rightsManager, address initialOwner) public initializer {
+    function initialize(address _rightsManager, address _claimsRegistryContract, address initialOwner) public initializer {
         rightsManager = QTSPRightsManager(_rightsManager);
+        claimsRegistryContract = ClaimsRegistryContract(_claimsRegistryContract);
         __Ownable_init(initialOwner);
         __UUPSUpgradeable_init();
     }
     
     /**
-     * @dev Verify a signature from a QTSP Contract for a specific claim
+     * @dev Verify a signature for a specific claim - automatically handles stored signatures
+     * @param user The address of the user whose claim is being verified
+     * @param claim The claim type to verify
+     * @return True if the signature is valid and from an authorized QTSP Contract
+     * @notice This function automatically determines whether to use a stored signature
+     *         from a ClaimToken contract or requires external signature verification.
+     *         It first checks if the user has a token for this claim type, and if so,
+     *         verifies the stored signature. Otherwise, it returns false.
+     */
+    function verifySignature(
+        address user,
+        bytes32 claim
+    ) public returns (bool) {
+        // Get the ClaimToken contract address for this claim type
+        address tokenContract = claimsRegistryContract.getClaimTokenAddress(claim);
+        
+        // If no token contract exists for this claim, verification fails
+        if (tokenContract == address(0)) {
+            emit SignatureVerificationFailed(user, claim, address(0));
+            return false;
+        }
+        
+        // Get the stored signature from the ClaimToken contract
+        ClaimToken tokenContractInstance = ClaimToken(tokenContract);
+        
+        // Check if user has token first
+        if (!tokenContractInstance.hasToken(user)) {
+            emit SignatureVerificationFailed(user, claim, address(0));
+            return false;
+        }
+        
+        // Get the stored signature (this will not revert now since we checked hasToken)
+        bytes memory storedSignature = tokenContractInstance.getUserSignature(user);
+        
+        // Verify the stored signature using the internal verification logic
+        return _verifySignatureInternal(user, claim, storedSignature);
+    }
+    
+    /**
+     * @dev Internal function to verify a signature from a QTSP Contract for a specific claim
      * @param user The address of the user whose claim is being verified
      * @param claim The claim type to verify
      * @param signature The cryptographic signature to verify
      * @return True if the signature is valid and from an authorized QTSP Contract
-     * @notice This function recovers the signer from the signature and verifies
-     *         their authorization to issue the specified claim
+     * @notice This internal function handles the actual signature verification logic
      */
-    function verifySignature(
+    function _verifySignatureInternal(
         address user,
         bytes32 claim,
         bytes memory signature
-    ) public returns (bool) {
+    ) internal returns (bool) {
         require(signature.length == 65, "Invalid signature length");
         
         // Create the message hash that was signed
@@ -73,37 +117,6 @@ contract TrustSmartContract is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         }
         
         return isAuthorized;
-    }
-    
-    /**
-     * @dev Verify a signature stored in a ClaimToken contract
-     * @param user The address of the user whose claim is being verified
-     * @param claim The claim type to verify
-     * @param tokenContract The ClaimToken contract address containing the stored signature
-     * @return True if the signature is valid and from an authorized QTSP Contract
-     * @notice This function retrieves a stored signature from a ClaimToken contract
-     *         and verifies its authenticity and authorization
-     */
-    function verifyStoredSignature(
-        address user,
-        bytes32 claim,
-        address tokenContract
-    ) external returns (bool) {
-        require(tokenContract != address(0), "Invalid token contract address");
-        
-        // Get the stored signature from the ClaimToken contract
-        ClaimToken tokenContractInstance = ClaimToken(tokenContract);
-        
-        // Check if user has token first
-        if (!tokenContractInstance.hasToken(user)) {
-            return false;
-        }
-        
-        // Get the stored signature (this will not revert now since we checked hasToken)
-        bytes memory storedSignature = tokenContractInstance.getUserSignature(user);
-        
-        // Verify the stored signature
-        return verifySignature(user, claim, storedSignature);
     }
     
     /**

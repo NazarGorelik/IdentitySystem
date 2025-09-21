@@ -78,7 +78,6 @@ contract SepoliaHelperConfig is Script {
         ClaimToken over18TokenImpl = new ClaimToken();
         ClaimToken euCitizenTokenImpl = new ClaimToken();
         RestrictedSmartContract restrictedContractImpl = new RestrictedSmartContract(
-            address(0), // Will be set after proxy deployment
             address(0)  // Will be set after proxy deployment
         );
         
@@ -101,14 +100,13 @@ contract SepoliaHelperConfig is Script {
         
         ERC1967Proxy rightsManagerProxy = _deployRightsManagerProxySepolia(impls.rightsManagerImpl, deployerKey);
         ERC1967Proxy claimsRegistryProxy = _deployClaimsRegistryProxySepolia(impls.claimsRegistryImpl, deployerKey);
-        ERC1967Proxy trustContractProxy = _deployTrustContractProxySepolia(impls.trustContractImpl, address(rightsManagerProxy), deployerKey);
+        ERC1967Proxy trustContractProxy = _deployTrustContractProxySepolia(impls.trustContractImpl, address(rightsManagerProxy), address(claimsRegistryProxy), deployerKey);
         ERC1967Proxy qtspContract1Proxy = _deployQTSPContract1ProxySepolia(impls.qtspContract1Impl, address(claimsRegistryProxy), deployerKey);
         ERC1967Proxy qtspContract2Proxy = _deployQTSPContract2ProxySepolia(impls.qtspContract2Impl, address(claimsRegistryProxy), deployerKey);
         ERC1967Proxy over18TokenProxy = _deployOver18TokenProxySepolia(impls.over18TokenImpl, address(rightsManagerProxy), deployerKey);
         ERC1967Proxy euCitizenTokenProxy = _deployEuCitizenTokenProxySepolia(impls.euCitizenTokenImpl, address(rightsManagerProxy), deployerKey);
         
         RestrictedSmartContract restrictedContract = new RestrictedSmartContract(
-            address(claimsRegistryProxy),
             address(trustContractProxy)
         );
         
@@ -137,8 +135,8 @@ contract SepoliaHelperConfig is Script {
         return new ERC1967Proxy(address(impl), data);
     }
     
-    function _deployTrustContractProxySepolia(TrustSmartContract impl, address rightsManager, uint256 deployerKey) private returns (ERC1967Proxy) {
-        bytes memory data = abi.encodeWithSelector(TrustSmartContract.initialize.selector, rightsManager, deployerKey);
+    function _deployTrustContractProxySepolia(TrustSmartContract impl, address rightsManager, address claimsRegistry, uint256 deployerKey) private returns (ERC1967Proxy) {
+        bytes memory data = abi.encodeWithSelector(TrustSmartContract.initialize.selector, rightsManager, claimsRegistry, deployerKey);
         return new ERC1967Proxy(address(impl), data);
     }
     

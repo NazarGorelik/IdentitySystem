@@ -9,9 +9,10 @@ import "../QTSPManagement/QTSPRightsManager.sol";
 
 /**
  * @title Claim Token
- * @dev Custom token representing a specific claim with signature storage
+ * @dev Custom token contract representing a specific claim with signature storage
  * @notice Each claim type gets its own token contract that stores claimType and signature
- *         for individual users, enabling decentralized identity verification
+ *         for individual users. Tokens can only be issued/revoked by authorized QTSP contracts.
+ *         This is a custom implementation optimized for identity claims, not a standard ERC20 token.
  */
 contract ClaimToken is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     using ClaimsRegistry for bytes32;
@@ -47,8 +48,10 @@ contract ClaimToken is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     ) public initializer {
         require(ClaimsRegistry.isValidClaim(_claimType), "Invalid claim type");
         require(_rightsManager != address(0), "Invalid rights manager address");
+        
         claimType = _claimType;
         rightsManager = QTSPRightsManager(_rightsManager);
+        
         __Ownable_init(initialOwner);
         __UUPSUpgradeable_init();
     }
@@ -62,12 +65,13 @@ contract ClaimToken is Initializable, UUPSUpgradeable, OwnableUpgradeable {
      * @dev Issue token to a user (only callable by authorized QTSP Contracts)
      * @param user The user address to issue the token to
      * @param signature The cryptographic signature to store with the token
-     * @notice This function stores a signature that proves the user's claim
+     * @notice This function mints 1 ERC20 token and stores a signature that proves the user's claim
      *         has been verified by an authorized QTSP Contract
      */
     function issueToken(address user, bytes memory signature) external onlyAuthorizedQTSPContract {
         require(user != address(0), "Invalid user address");
         require(signature.length == 65, "Invalid signature length");
+        require(userSignatures[user].length == 0, "User already has a token");
         
         userSignatures[user] = signature;
         emit TokenIssued(user, claimType, signature);
@@ -76,8 +80,8 @@ contract ClaimToken is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     /**
      * @dev Revoke token from a user (only callable by authorized QTSP Contracts)
      * @param user The user address to revoke the token from
-     * @notice This function removes the stored signature, effectively revoking
-     *         the user's verified claim
+     * @notice This function burns the ERC20 token and removes the stored signature, 
+     *         effectively revoking the user's verified claim
      */
     function revokeToken(address user) external onlyAuthorizedQTSPContract {
         require(user != address(0), "Invalid user address");
