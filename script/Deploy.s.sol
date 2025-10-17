@@ -13,34 +13,24 @@ import {console} from "forge-std/console.sol";
  */
 contract Deploy is Script {
     function run() external {
-        console.log("=== Starting Deployment Process ===");
-        console.log("Network Chain ID:", block.chainid);
-        
         HelperConfig helperConfig = new HelperConfig();
-        
-        // Deploy contracts based on network - use cached chain ID from HelperConfig
         uint256 chainId = helperConfig.getChainId();
+
         if (chainId == 11155111) {
             // Sepolia network - always deploy
-            console.log("=== Deploying to Sepolia Network ===");
             try helperConfig.deploySepoliaContracts() returns (SharedStructs.NetworkConfig memory config) {
                 logDeploymentSummary(config);
-                console.log("=== Note: For Sepolia, generate signatures off-chain using MetaMask ===");
+                console.log("=== Note: For Sepolia, generate signatures off-chain ===");
+                console.log("Run: forge script script/GenerateSignatures.s.sol --fork-url $SEPOLIA_RPC_URL");
+                console.log("Then use cast to sign the message hashes with your QTSP private key");
             } catch Error(string memory reason) {
                 console.log("Sepolia deployment failed:", reason);
                 revert("Sepolia deployment failed");
             }
         } else if (chainId == 31337) {
             // Anvil network - get or create
-            console.log("=== Deploying to Anvil Network ===");
-            try helperConfig.getOrCreateNetworkConfig() returns (SharedStructs.NetworkConfig memory config) {
+            try helperConfig.getOrCreateAnvilNetworkConfig() returns (SharedStructs.NetworkConfig memory config) {
                 logDeploymentSummary(config);
-                
-                // Generate test signatures for Anvil network
-                console.log();
-                console.log("\n=== Generating Test Signatures for Anvil ===");
-                generateTestSignatures(config);
-                
             } catch Error(string memory reason) {
                 console.log("Anvil deployment failed:", reason);
                 revert("Anvil deployment failed");
@@ -52,53 +42,6 @@ contract Deploy is Script {
         console.log("=== Deployment Process Completed ===");
     }
     
-    function generateTestSignatures(SharedStructs.NetworkConfig memory config) internal pure {
-        // Generate signature for OVER_18 claim
-        generateSignatureForClaim(
-            "OVER_18",
-            ClaimsRegistry.OVER_18,
-            address(config.proxies.qtspContract1)
-        );
-        
-        // Generate signature for EU_CITIZEN claim
-        generateSignatureForClaim(
-            "EU_CITIZEN", 
-            ClaimsRegistry.EU_CITIZEN,
-            address(config.proxies.qtspContract2)
-        );
-    }
-    
-    function generateSignatureForClaim(
-        string memory claimName,
-        bytes32 claimType,
-        address qtspContract
-    ) internal pure {
-        // Generate a test user address (you can replace this with actual addresses)
-        address testUser = 0xa0Ee7A142d267C1f36714E4a8F75612F20a79720;
-        uint256 privateKey = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
-        
-        // Create the message hash
-        bytes32 messageHash = keccak256(abi.encodePacked(testUser, claimType));
-        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
-
-        // Sign the message
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, ethSignedMessageHash);
-        
-        // Fix: Create proper 65-byte signature without abi.encodePacked
-        bytes memory signature = new bytes(65);
-        assembly {
-            mstore(add(signature, 32), r)
-            mstore(add(signature, 64), s)
-            mstore8(add(signature, 96), v)
-        }
-        
-        console.log("---", claimName, "Claim ---");
-        console.log("QTSP Contract:", qtspContract);
-        console.log("Test User:", testUser);
-        console.log("Claim Type:", vm.toString(claimType));
-        console.log("Signature:", vm.toString(signature));
-        console.log("");
-    }
     
     function logDeploymentSummary(SharedStructs.NetworkConfig memory config) internal view {
         console.log("=== Deployment Summary ===");

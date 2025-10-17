@@ -41,7 +41,7 @@ contract QTSPRightsManagerTest is Test {
     function setUp() public {
         // Use HelperConfig for deployment
         HelperConfig helperConfig = new HelperConfig();
-        config = helperConfig.getOrCreateNetworkConfig();
+        config = helperConfig.getOrCreateAnvilNetworkConfig();
         
         // Get contract addresses from deployment
         rightsManager = QTSPRightsManager(config.proxies.rightsManager);

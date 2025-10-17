@@ -130,7 +130,7 @@ contract UpgradeUUPS is Script {
         // Get proxy addresses from HelperConfig
         console.log("Getting proxy addresses from HelperConfig...");
         HelperConfig helperConfig = new HelperConfig();
-        SharedStructs.NetworkConfig memory config = helperConfig.getOrCreateNetworkConfig();
+        SharedStructs.NetworkConfig memory config = helperConfig.getOrCreateAnvilNetworkConfig();
         
         console.log("Found proxy addresses:");
         console.log("Rights Manager Proxy:", address(config.proxies.rightsManager));

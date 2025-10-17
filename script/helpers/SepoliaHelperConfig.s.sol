@@ -14,41 +14,16 @@ import "../../src/RestrictedSmartContract.sol";
 import "./SharedStructs.s.sol";
 
 contract SepoliaHelperConfig is Script {
-    string private sepoliaKeyAlias = "SEPOLIA_PRIVATE_KEY";
-    address private DEFAULT_ANVIL_ADDRESS1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
-    address private DEFAULT_ANVIL_ADDRESS2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
 
-
-    function getSepoliaEthConfig() public pure returns (SharedStructs.NetworkConfig memory) {
-        return SharedStructs.NetworkConfig({
-            implementations: SharedStructs.ImplementationConfig({
-                rightsManagerImpl: QTSPRightsManager(address(0)),
-                claimsRegistryImpl: ClaimsRegistryContract(address(0)),
-                trustContractImpl: TrustSmartContract(address(0)),
-                qtspContract1Impl: QTSPContract(address(0)),
-                qtspContract2Impl: QTSPContract(address(0)),
-                over18TokenImpl: ClaimToken(address(0)),
-                euCitizenTokenImpl: ClaimToken(address(0)),
-                restrictedContractImpl: RestrictedSmartContract(address(0))
-            }),
-            proxies: SharedStructs.ProxyConfig({
-                rightsManager: QTSPRightsManager(address(0)),
-                claimsRegistry: ClaimsRegistryContract(address(0)),
-                trustContract: TrustSmartContract(address(0)),
-                qtspContract1: QTSPContract(address(0)),
-                qtspContract2: QTSPContract(address(0)),
-                over18Token: ClaimToken(address(0)),
-                euCitizenToken: ClaimToken(address(0)),
-                restrictedContract: RestrictedSmartContract(address(0))
-            })
-        });
-    }
+    uint256 private DEPLOYER_PRIVATE_KEY = vm.envUint("SEPOLIA_PRIVATE_KEY");
+    address private DEPLOYER_ADDRESS = vm.addr(DEPLOYER_PRIVATE_KEY);
+    uint256 private MOCK_DEPLOYER_PRIVATE_KEY = vm.envUint("MOCK_SEPOLIA_PRIVATE_KEY");
+    address private MOCK_DEPLOYER_ADDRESS = vm.addr(MOCK_DEPLOYER_PRIVATE_KEY);
+    address private TEST_USER = 0x242DDa6Dc21bbf23D77575697C19cFAeA1e14489;
 
     function deploySepoliaContracts() public returns (SharedStructs.NetworkConfig memory) {
-        uint256 deployerKey = _getSepoliaDeployerKey();
-        
         SharedStructs.ImplementationConfig memory impls = _deploySepoliaImplementations();
-        SharedStructs.ProxyConfig memory proxies = _deploySepoliaProxies(impls, deployerKey);
+        SharedStructs.ProxyConfig memory proxies = _deploySepoliaProxies(impls);
         _setupSepoliaPermissions(proxies);
         
         SharedStructs.NetworkConfig memory newConfig = SharedStructs.NetworkConfig({
@@ -56,20 +31,13 @@ contract SepoliaHelperConfig is Script {
             proxies: proxies
         });
         
+        generateTestSignatures(newConfig);
+
         return newConfig;
     }
     
-    function _getSepoliaDeployerKey() private view returns (uint256) {
-        try vm.envUint(sepoliaKeyAlias) returns (uint256 key) {
-            return key;
-        } catch {
-            revert("SEPOLIA_PRIVATE_KEY environment variable not set");
-        }
-    }
-    
     function _deploySepoliaImplementations() private returns (SharedStructs.ImplementationConfig memory) {
-        vm.startBroadcast();
-        
+        vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
         QTSPRightsManager rightsManagerImpl = new QTSPRightsManager();
         ClaimsRegistryContract claimsRegistryImpl = new ClaimsRegistryContract();
         TrustSmartContract trustContractImpl = new TrustSmartContract();
@@ -80,9 +48,8 @@ contract SepoliaHelperConfig is Script {
         RestrictedSmartContract restrictedContractImpl = new RestrictedSmartContract(
             address(0)  // Will be set after proxy deployment
         );
-        
         vm.stopBroadcast();
-        
+
         return SharedStructs.ImplementationConfig({
             rightsManagerImpl: rightsManagerImpl,
             claimsRegistryImpl: claimsRegistryImpl,
@@ -95,21 +62,16 @@ contract SepoliaHelperConfig is Script {
         });
     }
     
-    function _deploySepoliaProxies(SharedStructs.ImplementationConfig memory impls, uint256 deployerKey) private returns (SharedStructs.ProxyConfig memory) {
-        vm.startBroadcast();
-        
-        ERC1967Proxy rightsManagerProxy = _deployRightsManagerProxySepolia(impls.rightsManagerImpl, deployerKey);
-        ERC1967Proxy claimsRegistryProxy = _deployClaimsRegistryProxySepolia(impls.claimsRegistryImpl, deployerKey);
-        ERC1967Proxy trustContractProxy = _deployTrustContractProxySepolia(impls.trustContractImpl, address(rightsManagerProxy), address(claimsRegistryProxy), deployerKey);
-        ERC1967Proxy qtspContract1Proxy = _deployQTSPContract1ProxySepolia(impls.qtspContract1Impl, address(claimsRegistryProxy), deployerKey);
-        ERC1967Proxy qtspContract2Proxy = _deployQTSPContract2ProxySepolia(impls.qtspContract2Impl, address(claimsRegistryProxy), deployerKey);
-        ERC1967Proxy over18TokenProxy = _deployOver18TokenProxySepolia(impls.over18TokenImpl, address(rightsManagerProxy), deployerKey);
-        ERC1967Proxy euCitizenTokenProxy = _deployEuCitizenTokenProxySepolia(impls.euCitizenTokenImpl, address(rightsManagerProxy), deployerKey);
-        
-        RestrictedSmartContract restrictedContract = new RestrictedSmartContract(
-            address(trustContractProxy)
-        );
-        
+    function _deploySepoliaProxies(SharedStructs.ImplementationConfig memory impls) private returns (SharedStructs.ProxyConfig memory) {
+        vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
+        ERC1967Proxy rightsManagerProxy = _deployRightsManagerProxySepolia(impls.rightsManagerImpl);
+        ERC1967Proxy claimsRegistryProxy = _deployClaimsRegistryProxySepolia(impls.claimsRegistryImpl);
+        ERC1967Proxy trustContractProxy = _deployTrustContractProxySepolia(impls.trustContractImpl, address(rightsManagerProxy), address(claimsRegistryProxy));
+        ERC1967Proxy qtspContract1Proxy = _deployQTSPContract1ProxySepolia(impls.qtspContract1Impl, address(claimsRegistryProxy));
+        ERC1967Proxy qtspContract2Proxy = _deployQTSPContract2ProxySepolia(impls.qtspContract2Impl, address(claimsRegistryProxy));
+        ERC1967Proxy over18TokenProxy = _deployOver18TokenProxySepolia(impls.over18TokenImpl, address(rightsManagerProxy));
+        ERC1967Proxy euCitizenTokenProxy = _deployEuCitizenTokenProxySepolia(impls.euCitizenTokenImpl, address(rightsManagerProxy));
+        RestrictedSmartContract restrictedContract = new RestrictedSmartContract(address(trustContractProxy));
         vm.stopBroadcast();
         
         return SharedStructs.ProxyConfig({
@@ -125,44 +87,43 @@ contract SepoliaHelperConfig is Script {
     }
     
     // Sepolia-specific proxy deployment functions (for private key usage)
-    function _deployRightsManagerProxySepolia(QTSPRightsManager impl, uint256 deployerKey) private returns (ERC1967Proxy) {
-        bytes memory data = abi.encodeWithSelector(QTSPRightsManager.initialize.selector, deployerKey);
+    function _deployRightsManagerProxySepolia(QTSPRightsManager impl) private returns (ERC1967Proxy) {
+        bytes memory data = abi.encodeWithSelector(QTSPRightsManager.initialize.selector, DEPLOYER_ADDRESS);
         return new ERC1967Proxy(address(impl), data);
     }
     
-    function _deployClaimsRegistryProxySepolia(ClaimsRegistryContract impl, uint256 deployerKey) private returns (ERC1967Proxy) {
-        bytes memory data = abi.encodeWithSelector(ClaimsRegistryContract.initialize.selector, deployerKey);
+    function _deployClaimsRegistryProxySepolia(ClaimsRegistryContract impl) private returns (ERC1967Proxy) {
+        bytes memory data = abi.encodeWithSelector(ClaimsRegistryContract.initialize.selector, DEPLOYER_ADDRESS);
         return new ERC1967Proxy(address(impl), data);
     }
     
-    function _deployTrustContractProxySepolia(TrustSmartContract impl, address rightsManager, address claimsRegistry, uint256 deployerKey) private returns (ERC1967Proxy) {
-        bytes memory data = abi.encodeWithSelector(TrustSmartContract.initialize.selector, rightsManager, claimsRegistry, deployerKey);
+    function _deployTrustContractProxySepolia(TrustSmartContract impl, address rightsManager, address claimsRegistry) private returns (ERC1967Proxy) {
+        bytes memory data = abi.encodeWithSelector(TrustSmartContract.initialize.selector, rightsManager, claimsRegistry, DEPLOYER_ADDRESS);
         return new ERC1967Proxy(address(impl), data);
     }
     
-    function _deployQTSPContract1ProxySepolia(QTSPContract impl, address claimsRegistry, uint256 deployerKey) private returns (ERC1967Proxy) {
-        bytes memory data = abi.encodeWithSelector(QTSPContract.initialize.selector, claimsRegistry, deployerKey);
+    function _deployQTSPContract1ProxySepolia(QTSPContract impl, address claimsRegistry) private returns (ERC1967Proxy) {
+        bytes memory data = abi.encodeWithSelector(QTSPContract.initialize.selector, claimsRegistry, DEPLOYER_ADDRESS);
         return new ERC1967Proxy(address(impl), data);
     }
     
-    function _deployQTSPContract2ProxySepolia(QTSPContract impl, address claimsRegistry, uint256 deployerKey) private returns (ERC1967Proxy) {
-        bytes memory data = abi.encodeWithSelector(QTSPContract.initialize.selector, claimsRegistry, deployerKey);
+    function _deployQTSPContract2ProxySepolia(QTSPContract impl, address claimsRegistry) private returns (ERC1967Proxy) {
+        bytes memory data = abi.encodeWithSelector(QTSPContract.initialize.selector, claimsRegistry, MOCK_DEPLOYER_ADDRESS);
         return new ERC1967Proxy(address(impl), data);
     }
     
-    function _deployOver18TokenProxySepolia(ClaimToken impl, address rightsManager, uint256 deployerKey) private returns (ERC1967Proxy) {
-        bytes memory data = abi.encodeWithSelector(ClaimToken.initialize.selector, ClaimsRegistry.OVER_18, rightsManager, deployerKey);
+    function _deployOver18TokenProxySepolia(ClaimToken impl, address rightsManager) private returns (ERC1967Proxy) {
+        bytes memory data = abi.encodeWithSelector(ClaimToken.initialize.selector, ClaimsRegistry.OVER_18, rightsManager, DEPLOYER_ADDRESS);
         return new ERC1967Proxy(address(impl), data);
     }
     
-    function _deployEuCitizenTokenProxySepolia(ClaimToken impl, address rightsManager, uint256 deployerKey) private returns (ERC1967Proxy) {
-        bytes memory data = abi.encodeWithSelector(ClaimToken.initialize.selector, ClaimsRegistry.EU_CITIZEN, rightsManager, deployerKey);
+    function _deployEuCitizenTokenProxySepolia(ClaimToken impl, address rightsManager) private returns (ERC1967Proxy) {
+        bytes memory data = abi.encodeWithSelector(ClaimToken.initialize.selector, ClaimsRegistry.EU_CITIZEN, rightsManager, DEPLOYER_ADDRESS);
         return new ERC1967Proxy(address(impl), data);
     }
     
     function _setupSepoliaPermissions(SharedStructs.ProxyConfig memory proxies) private {
-        vm.startBroadcast();
-        
+        vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
         // Register claim tokens
         ClaimsRegistryContract(address(proxies.claimsRegistry)).registerClaimToken(
             ClaimsRegistry.OVER_18, 
@@ -176,11 +137,11 @@ contract SepoliaHelperConfig is Script {
         // Setup QTSP permissions
         QTSPRightsManager(address(proxies.rightsManager)).addTrustedQTSPContract(
             address(proxies.qtspContract1), 
-            DEFAULT_ANVIL_ADDRESS1
+            proxies.qtspContract1.owner()
         );
         QTSPRightsManager(address(proxies.rightsManager)).addTrustedQTSPContract(
             address(proxies.qtspContract2), 
-            DEFAULT_ANVIL_ADDRESS2
+            proxies.qtspContract2.owner()
         );
         QTSPRightsManager(address(proxies.rightsManager)).addQTSPContractToClaim(
             address(proxies.qtspContract1), 
@@ -190,7 +151,48 @@ contract SepoliaHelperConfig is Script {
             address(proxies.qtspContract2), 
             ClaimsRegistry.EU_CITIZEN
         );
-        
         vm.stopBroadcast();
+    }
+
+    function generateTestSignatures(SharedStructs.NetworkConfig memory config) internal view {
+        console.log("========================");
+        console.log("\n=== Generating Test Signatures for Anvil ===");
+        
+        generateSignatureForClaim(
+            "OVER_18",
+            ClaimsRegistry.OVER_18,
+            address(config.proxies.qtspContract1)
+        );
+        
+        // Generate signature for EU_CITIZEN claim
+        generateSignatureForClaim(
+            "EU_CITIZEN", 
+            ClaimsRegistry.EU_CITIZEN,
+            address(config.proxies.qtspContract2)
+        );
+        
+        console.log("=== Signature Generation Complete ===");
+        console.log("Note: Use these signatures with the deployed QTSP contracts");
+    }
+
+    function generateSignatureForClaim(
+        string memory claimName,
+        bytes32 claimType,
+        address qtspContract
+    ) internal view {
+        // Create the message hash (same as in TrustSmartContract)
+        bytes32 messageHash = keccak256(abi.encodePacked(TEST_USER, claimType));
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+
+        console.log("---", claimName, "Claim ---");
+        console.log("QTSP Contract:", qtspContract);
+        console.log("Test User:", TEST_USER);
+        console.log("Claim Type:", vm.toString(claimType));
+        console.log("Message Hash:", vm.toString(messageHash));
+        console.log("ETH Signed Message Hash:", vm.toString(ethSignedMessageHash));
+        console.log("");
+        console.log("Run this command to generate the signature:");
+        console.log("cast wallet sign --no-hash", vm.toString(ethSignedMessageHash), "--account SEPOLIA_PRIVATE_KEY");
+        console.log("");
     }
 }

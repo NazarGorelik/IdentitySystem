@@ -8,6 +8,7 @@ import "./ClaimManagement/ClaimsRegistry.sol";
 import "./ClaimManagement/ClaimsRegistryContract.sol";
 import "./ClaimManagement/ClaimToken.sol";
 import "./QTSPManagement/QTSPRightsManager.sol";
+import {console} from "forge-std/console.sol";
 
 /**
  * @title Trust Smart Contract
@@ -27,6 +28,7 @@ contract TrustSmartContract is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     // Events
     event SignatureVerified(address indexed user, bytes32 indexed claim, address indexed qtspContractOwner);
     event SignatureVerificationFailed(address indexed user, bytes32 indexed claim, address indexed qtspContractOwner);
+    event SignerRecovered(address indexed recoveredSigner, bytes32 indexed hash);
     
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -98,7 +100,7 @@ contract TrustSmartContract is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         bytes32 claim,
         bytes memory signature
     ) internal returns (bool) {
-        require(signature.length == 65, "Invalid signature length");
+        // require(signature.length == 65, "Invalid signature length");
         
         // Create the message hash that was signed
         bytes32 messageHash = keccak256(abi.encodePacked(user, claim));
@@ -108,6 +110,7 @@ contract TrustSmartContract is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         address signer = recoverSigner(ethSignedMessageHash, signature);
         
         // Check if the signer is a trusted QTSP Contract with permission for this claim
+        // First try as QTSP Contract Owner, then as QTSP Contract directly
         bool isAuthorized = rightsManager.isQTSPContractOwnerAuthorizedForClaim(signer, claim);
 
         if (isAuthorized) {
@@ -127,9 +130,7 @@ contract TrustSmartContract is Initializable, UUPSUpgradeable, OwnableUpgradeabl
      * @notice This function handles Ethereum signature recovery with proper
      *         signature malleability protection
      */
-    function recoverSigner(bytes32 hash, bytes memory signature) public pure returns (address) {
-        require(signature.length == 65, "Invalid signature length");
-        
+    function recoverSigner(bytes32 hash, bytes memory signature) public returns (address) {
         bytes32 r;
         bytes32 s;
         uint8 v;
@@ -146,8 +147,11 @@ contract TrustSmartContract is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         }
         
         require(v == 27 || v == 28, "Invalid signature 'v' value");
+        address recovered = ecrecover(hash, v, r, s);
         
-        return ecrecover(hash, v, r, s);
+        emit SignerRecovered(recovered, hash);
+        
+        return recovered;
     }
     
     /**

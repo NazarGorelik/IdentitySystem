@@ -14,10 +14,11 @@ import "../../src/RestrictedSmartContract.sol";
 import "./SharedStructs.s.sol";
 
 contract AnvilHelperConfig is Script {
-    address private DEFAULT_ANVIL_ADDRESS1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
-    address private DEFAULT_ANVIL_ADDRESS2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
-    uint256 private DEFAULT_ANVIL_PRIVATE_KEY1 = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
-    uint256 private DEFAULT_ANVIL_PRIVATE_KEY2 = 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d;
+    address private DEPLOYER_PUBLIC_KEY = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+    uint256 private DEPLOYER_PRIVATE_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
+    address private MOCK_DEPLOYER_PUBLIC_KEY = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
+    uint256 private MOCK_DEPLOYER_PRIVATE_KEY = 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d;
+    address private TEST_USER = 0xa0Ee7A142d267C1f36714E4a8F75612F20a79720;
 
     SharedStructs.NetworkConfig public activeNetworkConfig;
 
@@ -35,13 +36,15 @@ contract AnvilHelperConfig is Script {
             proxies: proxies
         });
         
+        generateTestSignatures(newConfig);
         activeNetworkConfig = newConfig;
+
         return newConfig;
     }
     
     function _deployAnvilImplementations() private returns (SharedStructs.ImplementationConfig memory) {
         // Start broadcast for contract deployments
-        vm.startBroadcast(DEFAULT_ANVIL_PRIVATE_KEY1);
+        vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
         
         QTSPRightsManager rightsManagerImpl = new QTSPRightsManager();
         ClaimsRegistryContract claimsRegistryImpl = new ClaimsRegistryContract();
@@ -70,15 +73,15 @@ contract AnvilHelperConfig is Script {
     
     function _deployAnvilProxies(SharedStructs.ImplementationConfig memory impls) private returns (SharedStructs.ProxyConfig memory) {
         // Start broadcast for proxy deployments
-        vm.startBroadcast(DEFAULT_ANVIL_PRIVATE_KEY1);
+        vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
         
-        ERC1967Proxy rightsManagerProxy = _deployRightsManagerProxy(impls.rightsManagerImpl, DEFAULT_ANVIL_ADDRESS1);
-        ERC1967Proxy claimsRegistryProxy = _deployClaimsRegistryProxy(impls.claimsRegistryImpl, DEFAULT_ANVIL_ADDRESS1);
-        ERC1967Proxy trustContractProxy = _deployTrustContractProxy(impls.trustContractImpl, address(rightsManagerProxy), address(claimsRegistryProxy), DEFAULT_ANVIL_ADDRESS1);
-        ERC1967Proxy qtspContract1Proxy = _deployQTSPContract1Proxy(impls.qtspContract1Impl, address(claimsRegistryProxy), DEFAULT_ANVIL_ADDRESS1);
-        ERC1967Proxy qtspContract2Proxy = _deployQTSPContract2Proxy(impls.qtspContract2Impl, address(claimsRegistryProxy), DEFAULT_ANVIL_ADDRESS2);
-        ERC1967Proxy over18TokenProxy = _deployOver18TokenProxy(impls.over18TokenImpl, address(rightsManagerProxy), DEFAULT_ANVIL_ADDRESS1);
-        ERC1967Proxy euCitizenTokenProxy = _deployEuCitizenTokenProxy(impls.euCitizenTokenImpl, address(rightsManagerProxy), DEFAULT_ANVIL_ADDRESS1);
+        ERC1967Proxy rightsManagerProxy = _deployRightsManagerProxy(impls.rightsManagerImpl, DEPLOYER_PUBLIC_KEY);
+        ERC1967Proxy claimsRegistryProxy = _deployClaimsRegistryProxy(impls.claimsRegistryImpl, DEPLOYER_PUBLIC_KEY);
+        ERC1967Proxy trustContractProxy = _deployTrustContractProxy(impls.trustContractImpl, address(rightsManagerProxy), address(claimsRegistryProxy), DEPLOYER_PUBLIC_KEY);
+        ERC1967Proxy qtspContract1Proxy = _deployQTSPContract1Proxy(impls.qtspContract1Impl, address(claimsRegistryProxy), DEPLOYER_PUBLIC_KEY);
+        ERC1967Proxy qtspContract2Proxy = _deployQTSPContract2Proxy(impls.qtspContract2Impl, address(claimsRegistryProxy), MOCK_DEPLOYER_PUBLIC_KEY);
+        ERC1967Proxy over18TokenProxy = _deployOver18TokenProxy(impls.over18TokenImpl, address(rightsManagerProxy), DEPLOYER_PUBLIC_KEY);
+        ERC1967Proxy euCitizenTokenProxy = _deployEuCitizenTokenProxy(impls.euCitizenTokenImpl, address(rightsManagerProxy), DEPLOYER_PUBLIC_KEY);
         
         RestrictedSmartContract restrictedContract = new RestrictedSmartContract(
             address(trustContractProxy)
@@ -134,7 +137,7 @@ contract AnvilHelperConfig is Script {
     }
     
     function _setupAnvilPermissions(SharedStructs.ProxyConfig memory proxies) private {
-        vm.startBroadcast(DEFAULT_ANVIL_PRIVATE_KEY1);
+        vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
         
         // Register claim tokens
         ClaimsRegistryContract(address(proxies.claimsRegistry)).registerClaimToken(
@@ -167,6 +170,48 @@ contract AnvilHelperConfig is Script {
         );
         
         vm.stopBroadcast();
+    }
+
+    function generateTestSignatures(SharedStructs.NetworkConfig memory config) internal view {
+        console.log("========================");
+        console.log("\n=== Generating Test Signatures for Anvil ===");
+
+        // Generate signature for OVER_18 claim
+        generateSignatureForClaim(
+            "OVER_18",
+            ClaimsRegistry.OVER_18,
+            address(config.proxies.qtspContract1)
+        );
+        
+        // Generate signature for EU_CITIZEN claim
+        generateSignatureForClaim(
+            "EU_CITIZEN", 
+            ClaimsRegistry.EU_CITIZEN,
+            address(config.proxies.qtspContract2)
+        );
+    }
+    
+    function generateSignatureForClaim(
+        string memory claimName,
+        bytes32 claimType,
+        address qtspContract
+    ) internal view {
+        // Create the message hash
+        bytes32 messageHash = keccak256(abi.encodePacked(TEST_USER, claimType));
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+
+        // Sign the message
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(DEPLOYER_PRIVATE_KEY, ethSignedMessageHash);
+        
+        // Create proper 65-byte signature
+        bytes memory signature = abi.encodePacked(r, s, v);
+        
+        console.log("---", claimName, "Claim ---");
+        console.log("QTSP Contract:", qtspContract);
+        console.log("Test User:", TEST_USER);
+        console.log("Claim Type:", vm.toString(claimType));
+        console.log("Signature:", vm.toString(signature));
+        console.log("");
     }
     
     /**

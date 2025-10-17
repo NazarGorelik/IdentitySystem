@@ -44,7 +44,7 @@ contract QTSPContractTest is Test {
     function setUp() public {
         // Use your deployment script to get the network configuration
         HelperConfig helperConfig = new HelperConfig();
-        config = helperConfig.getOrCreateNetworkConfig();
+        config = helperConfig.getOrCreateAnvilNetworkConfig();
         
         // Get contract addresses from your deployment
         qtspContract1 = QTSPContract(config.proxies.qtspContract1);

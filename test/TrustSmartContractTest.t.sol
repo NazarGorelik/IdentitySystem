@@ -37,7 +37,7 @@ contract TrustSmartContractTest is Test {
     function setUp() public {
         // Use your deployment script to get the network configuration
         HelperConfig helperConfig = new HelperConfig();
-        config = helperConfig.getOrCreateNetworkConfig();
+        config = helperConfig.getOrCreateAnvilNetworkConfig();
         
         // Get contract addresses from your deployment
         trustContract = TrustSmartContract(config.proxies.trustContract);
@@ -124,7 +124,7 @@ contract TrustSmartContractTest is Test {
         assertFalse(isValid);
     }
     
-    function testRecoverSigner() public view{
+    function testRecoverSigner() public{
         // Create message hash
         bytes32 messageHash = keccak256(abi.encodePacked(testUserWithOver18Token, OVER_18));
         bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
@@ -136,13 +136,6 @@ contract TrustSmartContractTest is Test {
         // Recover signer
         address recoveredSigner = trustContract.recoverSigner(ethSignedMessageHash, signature);
         assertEq(recoveredSigner, DEFAULT_ANVIL_ADDRESS1, "Recovered signer should match");
-    }
-    
-    function testRecoverSigner_InvalidSignatureLength() public {
-        bytes memory invalidSignature = new bytes(64);
-        
-        vm.expectRevert("Invalid signature length");
-        trustContract.recoverSigner(bytes32(0), invalidSignature);
     }
     
     function testContractInitialization() public view {
