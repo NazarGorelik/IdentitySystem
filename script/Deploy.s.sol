@@ -20,9 +20,6 @@ contract Deploy is Script {
             // Sepolia network - always deploy
             try helperConfig.deploySepoliaContracts() returns (SharedStructs.NetworkConfig memory config) {
                 logDeploymentSummary(config);
-                console.log("=== Note: For Sepolia, generate signatures off-chain ===");
-                console.log("Run: forge script script/GenerateSignatures.s.sol --fork-url $SEPOLIA_RPC_URL");
-                console.log("Then use cast to sign the message hashes with your QTSP private key");
             } catch Error(string memory reason) {
                 console.log("Sepolia deployment failed:", reason);
                 revert("Sepolia deployment failed");
@@ -80,5 +77,29 @@ contract Deploy is Script {
         console.log("All contracts (except RestrictedSmartContract) are upgradeable via UUPS pattern");
         console.log("Implementation contracts can be upgraded while preserving state and addresses");
         console.log("Use proxy addresses for all interactions with the system");
+        console.log("To upgrade contracts, first deploy new implementations, then upgrade proxies. Example with OVER_18 token:");
+        console.log("");
+        
+        if (block.chainid == 31337) {
+            console.log("***Run 'cast storage <PROXY_ADDRESS> 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc --rpc-url http://127.0.0.1:8545' to get the Implementation address");
+            console.log("Step 1: Deploy ClaimsRegistry library");
+            console.log("forge create src/ClaimManagement/ClaimsRegistry.sol:ClaimsRegistry --rpc-url http://127.0.0.1:8545 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --broadcast");
+            console.log("");
+            console.log("Step 2: Deploy new OVER_18 ClaimToken implementation (replace <CLAIMS_REGISTRY_ADDRESS> with Step 1 address)");
+            console.log("forge create src/ClaimManagement/ClaimToken.sol:ClaimToken --libraries src/ClaimManagement/ClaimsRegistry.sol:ClaimsRegistry:<CLAIMS_REGISTRY_ADDRESS> --rpc-url http://127.0.0.1:8545 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --broadcast");
+            console.log("");
+            console.log("Step 3: Upgrade OVER_18 ClaimToken proxy (replace <NEW_OVER18_IMPL> with Step 2 address)");
+            console.log("cast send", address(config.proxies.over18Token), '"upgradeToAndCall(address,bytes)" <NEW_OVER18_IMPL> "0x" --rpc-url http://127.0.0.1:8545 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+        } else if (block.chainid == 11155111) {
+            console.log("***Run 'cast storage <PROXY_ADDRESS> 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc --rpc-url $SEPOLIA_RPC_URL' to get the Implementation address");
+            console.log("Step 1: Deploy ClaimsRegistry library");
+            console.log("forge create src/ClaimManagement/ClaimsRegistry.sol:ClaimsRegistry --rpc-url $SEPOLIA_RPC_URL --account SEPOLIA_PRIVATE_KEY --broadcast");
+            console.log("");
+            console.log("Step 2: Deploy new OVER_18 ClaimToken implementation (replace <CLAIMS_REGISTRY_ADDRESS> with Step 1 address)");
+            console.log("forge create src/ClaimManagement/ClaimToken.sol:ClaimToken --libraries src/ClaimManagement/ClaimsRegistry.sol:ClaimsRegistry:<CLAIMS_REGISTRY_ADDRESS> --rpc-url $SEPOLIA_RPC_URL --account SEPOLIA_PRIVATE_KEY --broadcast");
+            console.log("");
+            console.log("Step 3: Upgrade OVER_18 ClaimToken proxy (replace <NEW_OVER18_IMPL> with Step 2 address)");
+            console.log("cast send", address(config.proxies.over18Token), '"upgradeToAndCall(address,bytes)" <NEW_OVER18_IMPL> "0x" --rpc-url $SEPOLIA_RPC_URL --account SEPOLIA_PRIVATE_KEY');
+        }
     }
 }
